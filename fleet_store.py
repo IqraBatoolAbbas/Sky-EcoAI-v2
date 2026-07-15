@@ -47,6 +47,8 @@ class FleetStore:
                 "baseline_snapshot": None,
                 "latest_delta": None,
                 "activity_log": [],
+                "alerts_outbox": [],
+                "enforce_carbon_budget": True,
                 "updated_at": self._now(),
             }
             self._write(state)
@@ -256,11 +258,35 @@ class FleetStore:
                 "detail": detail,
             }
             state.setdefault("activity_log", []).append(entry)
-            # keep last 80 only
             state["activity_log"] = state["activity_log"][-80:]
             state["updated_at"] = self._now()
             self._write(state)
             return entry
+
+    def push_alert(self, alert: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            state = self._read()
+            entry = {
+                "id": f"AL-{uuid.uuid4().hex[:8]}",
+                "timestamp": self._now(),
+                **alert,
+            }
+            state.setdefault("alerts_outbox", []).append(entry)
+            state["alerts_outbox"] = state["alerts_outbox"][-40:]
+            state["updated_at"] = self._now()
+            self._write(state)
+            return entry
+
+    def list_alerts(self) -> list[dict[str, Any]]:
+        return list(reversed(self.get_state().get("alerts_outbox", [])[-15:]))
+
+    def set_carbon_enforcement(self, enabled: bool) -> bool:
+        with self._lock:
+            state = self._read()
+            state["enforce_carbon_budget"] = bool(enabled)
+            state["updated_at"] = self._now()
+            self._write(state)
+            return state["enforce_carbon_budget"]
 
     def log_event(self, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
@@ -377,10 +403,21 @@ class FleetStore:
             "co2_avoided_vs_baseline_kg": round(max(0, baseline_co2 - current_co2), 3),
             "deliveries_protected": active.get("deliveries_assigned", 0),
             "disruptions_resolved": sum(
-                1 for e in events if e.get("type") in ("breakdown", "urgent_order", "road_blockage", "range_warning")
+                1
+                for e in events
+                if e.get("type")
+                in ("breakdown", "urgent_order", "road_blockage", "range_warning", "carbon_budget_breach")
             ),
             "agent_actions": len(decisions),
             "disruption_history": events[-10:],
             "delta": state.get("latest_delta"),
             "baseline": baseline,
+            "carbon_budget_kg": state.get("carbon_budget_kg", 45),
+            "enforce_carbon_budget": state.get("enforce_carbon_budget", True),
+            "impact_score": round(
+                (active.get("deliveries_assigned", 0) or 0) * 10
+                + max(0, baseline_co2 - current_co2) * 5
+                + len(decisions) * 2,
+                1,
+            ),
         }

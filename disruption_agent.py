@@ -175,6 +175,37 @@ class DisruptionAgent:
 
         raise ValueError(f"Unknown scenario: {scenario}")
 
+    def execute_nl_scenario(self, prompt: str) -> dict[str, Any]:
+        from genai_services import parse_natural_scenario, generate_ops_alert
+
+        parsed = parse_natural_scenario(prompt)
+        executed = []
+        for action in parsed.get("actions", []):
+            atype = (action.get("type") or "").lower()
+            if atype == "breakdown":
+                executed.append(self.simulate_breakdown(action.get("vehicle_id")))
+            elif atype == "urgent_order":
+                executed.append(self.insert_urgent_order(action))
+            elif atype == "road_blockage":
+                executed.append(
+                    self.apply_road_penalty(
+                        float(action.get("lat", 31.52)),
+                        float(action.get("lng", 74.34)),
+                        float(action.get("radius_km", 2.5)),
+                    )
+                )
+            elif atype == "range_warning":
+                executed.append(self.simulate_range_warning(action.get("vehicle_id") or "V6"))
+            elif atype == "carbon_budget_breach":
+                executed.append(self.run_scenario("carbon_budget_breach"))
+            alert = generate_ops_alert(atype or "scenario", parsed.get("summary", ""))
+            self.store.push_alert(alert)
+
+        recovery = None
+        if executed:
+            recovery = self.generate_recovery_plans("nl_scenario")
+        return {"parsed": parsed, "executed": executed, "recovery": recovery}
+
     def _build_explanation(self, trigger: str, plans: list[dict[str, Any]], at_risk: list[dict]) -> str:
         if not plans:
             return "No feasible recovery plan could be generated with available vehicles."

@@ -577,25 +577,45 @@ def api_fleet_optimize():
     data = request.get_json(silent=True) or {}
     mode = data.get("mode", "all")
     state = fleet_store.get_state()
+    budget = float(state.get("carbon_budget_kg") or 45)
+    enforce = bool(state.get("enforce_carbon_budget", True))
     if mode == "all":
         plans = fleet_optimizer.generate_all_modes(state["depot"], state["vehicles"], state["orders"])
         ranked = fleet_optimizer.compare_plans(plans)
     else:
         ranked = [fleet_optimizer.optimize_fleet(state["depot"], state["vehicles"], state["orders"], mode=mode)]
+
+    for p in ranked:
+        co2 = float(p.get("total_co2_kg") or 0)
+        p["within_carbon_budget"] = co2 <= budget
+        p["carbon_budget_kg"] = budget
+        if enforce and not p["within_carbon_budget"]:
+            p["score"] = round(float(p.get("score") or 0) + 5000, 2)
+            p["budget_penalty"] = True
+    ranked = sorted(ranked, key=lambda x: x.get("score", float("inf")))
+    for i, p in enumerate(ranked):
+        p["rank"] = i + 1
+
     fleet_store.set_candidate_plans(ranked)
     if ranked:
         fleet_store.log_decision(
             trigger="optimize",
-            alternatives=[{k: p.get(k) for k in ("id", "mode", "label", "score", "total_co2_kg", "total_operating_cost_pkr")} for p in ranked],
+            alternatives=[{k: p.get(k) for k in ("id", "mode", "label", "score", "total_co2_kg", "total_operating_cost_pkr", "within_carbon_budget")} for p in ranked],
             selected=ranked[0],
-            explanation=f"Generated {len(ranked)} plan(s); recommended {ranked[0].get('label')}.",
+            explanation=f"Generated {len(ranked)} plan(s); recommended {ranked[0].get('label')} (carbon enforce={enforce}).",
         )
     fleet_store.log_activity(
         current_actor(),
         "optimize",
         f"Generated {len(ranked)} plan(s); recommended {ranked[0].get('label') if ranked else 'none'}",
     )
-    return jsonify({"plans": ranked, "recommended_plan_id": ranked[0]["id"] if ranked else None})
+    return jsonify({
+        "plans": ranked,
+        "recommended_plan_id": ranked[0]["id"] if ranked else None,
+        "carbon_budget_kg": budget,
+        "enforce_carbon_budget": enforce,
+    })
+
 
 @app.post("/api/fleet/plans/<plan_id>/apply")
 @login_required_api
@@ -632,6 +652,8 @@ def api_fleet_events():
             result = disruption_agent.simulate_range_warning(data.get("vehicle_id", "V6"))
         else:
             return jsonify({"error": f"Unknown event type: {event_type}"}), 400
+        from genai_services import generate_ops_alert
+        fleet_store.push_alert(generate_ops_alert(event_type, str(result)[:120]))
         fleet_store.log_activity(current_actor(), f"event:{event_type}", str(result)[:180])
         return jsonify(result), 201
     except (KeyError, ValueError, TypeError) as e:
@@ -647,6 +669,8 @@ def api_fleet_recovery():
     if auto_apply and result.get("recommended_plan_id"):
         applied = disruption_agent.apply_recovery_plan(result["recommended_plan_id"], auto=True)
         result["applied"] = applied
+        from genai_services import generate_ops_alert
+        fleet_store.push_alert(generate_ops_alert("recovery_applied", result.get("explanation", "")))
     fleet_store.log_activity(
         current_actor(),
         "recovery",
@@ -713,6 +737,50 @@ def api_fleet_delta():
 @login_required_api
 def api_fleet_activity():
     return jsonify({"activity": fleet_store.get_dashboard().get("activity_log", [])})
+
+
+@app.post("/api/fleet/scenario/nl")
+@login_required_api
+def api_fleet_scenario_nl():
+    """Natural-language scenario generation (GenAI intent → tools)."""
+    data = request.get_json(silent=True) or {}
+    prompt = (data.get("prompt") or data.get("message") or "").strip()
+    if not prompt:
+        return jsonify({"error": "prompt is required", "example": "Two medical emergencies near Cantt then breakdown"}), 400
+    auto_recover = bool(data.get("auto_recover", True))
+    result = disruption_agent.execute_nl_scenario(prompt)
+    if auto_recover and result.get("recovery") and result["recovery"].get("recommended_plan_id"):
+        if data.get("auto_apply"):
+            applied = disruption_agent.apply_recovery_plan(result["recovery"]["recommended_plan_id"], auto=True)
+            result["applied"] = applied
+    fleet_store.log_activity(current_actor(), "nl_scenario", prompt[:160])
+    return jsonify(result), 201
+
+
+@app.get("/api/fleet/impact/narrative")
+@login_required_api
+def api_fleet_impact_narrative():
+    from genai_services import generate_impact_narrative
+
+    summary = fleet_store.get_impact_summary()
+    narrative = generate_impact_narrative(summary, fleet_store.get_decisions())
+    return jsonify({"summary": summary, **narrative})
+
+
+@app.get("/api/fleet/alerts")
+@login_required_api
+def api_fleet_alerts():
+    return jsonify({"alerts": fleet_store.list_alerts()})
+
+
+@app.post("/api/fleet/carbon-enforcement")
+@login_required_api
+def api_fleet_carbon_enforcement():
+    data = request.get_json(silent=True) or {}
+    enabled = bool(data.get("enabled", True))
+    val = fleet_store.set_carbon_enforcement(enabled)
+    fleet_store.log_activity(current_actor(), "carbon_enforcement", f"enabled={val}")
+    return jsonify({"enforce_carbon_budget": val})
 
 
 @app.post("/api/help/chat")

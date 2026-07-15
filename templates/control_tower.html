@@ -20,6 +20,7 @@
         <li data-step="5">Impact report</li>
       </ol>
       <button class="icon-btn" id="runDemoBtn" type="button" style="width:100%;margin-top:8px;">▶ Run guided demo</button>
+      <button class="primary-btn" id="judgeModeBtn" type="button" style="width:100%;margin-top:8px;">★ Judge Mode pitch</button>
     </div>
 
     <nav class="tower-nav" id="towerNav">
@@ -46,6 +47,13 @@
       <div class="pipeline-banner glass-card" id="pipelineBanner">
         <strong>Autonomous loop:</strong>
         <span>Fleet input → Optimize → Disrupt → Recover → Explain impact</span>
+      </div>
+      <div id="alertsTicker" class="alerts-ticker glass-card" hidden></div>
+      <div id="judgePitch" class="judge-pitch glass-card" hidden>
+        <h3>Judge Mode — Climate & Sustainability pitch</h3>
+        <p id="judgeNarrative">Generating impact narrative…</p>
+        <div class="scoreboard" id="impactScoreboard"></div>
+        <div class="sdg-row" id="sdgRow"></div>
       </div>
       <div class="kpi-grid" id="overviewKpis"></div>
       <div class="tower-split">
@@ -94,6 +102,10 @@
         <button class="filter-pill" data-mode="green">Green</button>
         <button class="filter-pill" data-mode="service">Service</button>
       </div>
+      <label class="auto-recovery-toggle" style="display:inline-flex;margin-bottom:12px;">
+        <input type="checkbox" id="carbonEnforceCheck" checked>
+        Enforce carbon budget (penalize over-budget plans)
+      </label>
       <button class="primary-btn" id="optimizeBtn" type="button">Generate route plans</button>
       <div class="opt-progress" id="optProgress"><span id="optProgressBar"></span></div>
       <div id="planComparison" class="plan-comparison-grid"></div>
@@ -112,6 +124,12 @@
           <button class="icon-btn scenario-btn" data-scenario="carbon_budget_breach" type="button">Carbon-budget breach</button>
           <button class="icon-btn scenario-btn" data-scenario="ev_low_range" type="button">EV low range</button>
         </div>
+        <h3 style="margin-top:16px;">Generative AI scenario (natural language)</h3>
+        <form id="nlScenarioForm" class="nl-scenario-form">
+          <input id="nlScenarioInput" placeholder='e.g. "Two medical emergencies near Cantt, then a vehicle breakdown"' autocomplete="off">
+          <button class="primary-btn" type="submit">Generate &amp; stage</button>
+        </form>
+        <p id="nlScenarioStatus" style="font-size:12px;color:var(--text-muted);margin:8px 0 0;"></p>
         <h3 style="margin-top:16px;">Disruption simulator</h3>
         <div class="event-btn-row">
           <button class="icon-btn event-btn" data-event="breakdown">Vehicle breakdown (auto-pick)</button>
@@ -172,6 +190,11 @@
       <div class="delta-strip glass-card" id="deltaStrip" hidden>
         <h3>Before → After</h3>
         <div class="delta-grid" id="deltaGrid"></div>
+      </div>
+      <div class="glass-card" id="impactNarrativeCard" style="margin-bottom:16px;">
+        <h3>Generative impact narrative</h3>
+        <p id="impactNarrativeText" style="color:var(--text-muted);font-size:14px;line-height:1.5;">Open Impact or Judge Mode to generate.</p>
+        <button class="icon-btn" id="regenNarrativeBtn" type="button" style="margin-top:8px;">↻ Regenerate narrative</button>
       </div>
       <div class="kpi-grid" id="impactKpis"></div>
       <div class="glass-card">

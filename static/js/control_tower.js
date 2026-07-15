@@ -100,6 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     renderImpact(await api("/api/fleet/impact"));
     renderPlans(state.candidate_plans || []);
+    await loadAlerts();
 
     // Infer demo step from state
     if (state.active_plan && (state.events || []).some((e) => e.type === "recovery_applied")) markDemoStep(5);
@@ -107,6 +108,49 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (state.active_plan) markDemoStep(3);
     else if ((state.candidate_plans || []).length) markDemoStep(2);
     else markDemoStep(1);
+  }
+
+  async function loadAlerts() {
+    try {
+      const data = await api("/api/fleet/alerts");
+      const alerts = data.alerts || [];
+      const ticker = document.getElementById("alertsTicker");
+      if (!ticker) return;
+      if (!alerts.length) {
+        ticker.hidden = true;
+        return;
+      }
+      const latest = alerts[0];
+      ticker.hidden = false;
+      ticker.innerHTML = `<strong>${latest.title || "Alert"}</strong> · ${latest.body || ""} <span style="color:var(--text-faint)">(${(latest.channels || []).join(", ")} · simulated)</span>`;
+    } catch (_) { /* ignore */ }
+  }
+
+  async function loadNarrative() {
+    const data = await api("/api/fleet/impact/narrative");
+    const text = document.getElementById("impactNarrativeText");
+    if (text) text.textContent = data.narrative || "";
+    const pitch = document.getElementById("judgePitch");
+    const narr = document.getElementById("judgeNarrative");
+    const board = document.getElementById("impactScoreboard");
+    const sdg = document.getElementById("sdgRow");
+    if (narr) narr.textContent = data.narrative || "";
+    if (board) {
+      const eq = data.equivalents || {};
+      const s = data.summary || {};
+      board.innerHTML = [
+        ["Impact score", s.impact_score ?? "—"],
+        ["CO₂ avoided (kg)", eq.co2_avoided_kg ?? 0],
+        ["Fuel eq. (L)", eq.fuel_liters_avoided_est ?? 0],
+        ["Trees eq.", eq.trees_annual_uptake_est ?? 0],
+        ["Deliveries", s.deliveries_protected ?? 0],
+      ].map(([l, v]) => `<div>${l}<strong>${v}</strong></div>`).join("");
+    }
+    if (sdg && data.sdg) {
+      sdg.textContent = `${data.sdg.primary} · ${(data.sdg.secondary || []).join(" · ")}`;
+    }
+    if (pitch) pitch.hidden = false;
+    return data;
   }
 
   function kpi(label, val, cls = "", mono = false) {
@@ -176,6 +220,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("optimizeBtn").addEventListener("click", async () => {
     setStatus("Optimizing fleet…");
+    const enforce = document.getElementById("carbonEnforceCheck")?.checked ?? true;
+    try {
+      await api("/api/fleet/carbon-enforcement", { method: "POST", body: JSON.stringify({ enabled: enforce }) });
+    } catch (_) { /* non-fatal */ }
     const prog = document.getElementById("optProgress");
     const bar = document.getElementById("optProgressBar");
     prog?.classList.add("visible");
@@ -204,6 +252,9 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="plan-metric"><span>Cost</span><b>PKR ${fmt(p.total_operating_cost_pkr, 0)}</b></div>
         <div class="plan-metric"><span>Est. CO₂e</span><b>${fmt(p.total_co2_kg, 2)} kg</b></div>
         ${p.unassigned_orders?.length ? `<div class="plan-metric"><span>Unassigned</span><b style="color:var(--danger)">${p.unassigned_orders.length}</b></div>` : ""}
+        <span class="budget-badge ${p.within_carbon_budget === false ? "bad" : "ok"}">
+          ${p.within_carbon_budget === false ? "Over carbon budget" : "Within carbon budget"}
+        </span>
         <button class="primary-btn apply-plan-btn" data-plan-id="${p.id}" style="width:100%;margin-top:10px;font-size:12px;">Apply plan</button>
       </div>`).join("");
 
@@ -231,6 +282,25 @@ document.addEventListener("DOMContentLoaded", () => {
       goPanel("events");
       setStatus(`Scenario ready: ${data.title || scenario}`);
     });
+  });
+
+  document.getElementById("nlScenarioForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("nlScenarioInput");
+    const status = document.getElementById("nlScenarioStatus");
+    const prompt = input.value.trim();
+    if (!prompt) return;
+    status.textContent = "Parsing with GenAI intent layer…";
+    setStatus("NL scenario…");
+    const data = await api("/api/fleet/scenario/nl", {
+      method: "POST",
+      body: JSON.stringify({ prompt, auto_recover: true }),
+    });
+    status.textContent = `${data.parsed?.summary || "Done"} · generator: ${data.parsed?.generator || "n/a"}`;
+    if (data.recovery?.recovery_plans) renderPlans(data.recovery.recovery_plans);
+    markDemoStep(4);
+    await refreshOverview();
+    setStatus("NL scenario staged — review recovery plans");
   });
 
   document.querySelectorAll(".event-btn").forEach((btn) => {
@@ -372,6 +442,7 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ---------- Impact ---------- */
   function renderImpact(summary) {
     document.getElementById("impactKpis").innerHTML = [
+      kpi("Impact score", summary.impact_score ?? "—", "good"),
       kpi("Km planned", fmt(summary.km_planned), "", true),
       kpi("Est. cost (PKR)", fmt(summary.estimated_cost_pkr, 0), "", true),
       kpi("Est. CO₂e (kg)", fmt(summary.estimated_co2_kg, 2), "good"),
@@ -455,12 +526,31 @@ document.addEventListener("DOMContentLoaded", () => {
       markDemoStep(5);
       goPanel("impact");
       await refreshOverview();
+      await loadNarrative();
       setStatus("Guided demo complete — ask Copilot why the plan was selected");
     } catch (err) {
       setStatus(`Demo error: ${err.message}`);
     } finally {
       btn.disabled = false;
     }
+  });
+
+  document.getElementById("judgeModeBtn")?.addEventListener("click", async () => {
+    goPanel("overview");
+    setStatus("Judge Mode: generating GenAI impact pitch…");
+    try {
+      await loadNarrative();
+      document.getElementById("judgePitch")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      setStatus("Judge Mode ready — narrative + SDG scoreboard");
+    } catch (err) {
+      setStatus(`Judge Mode error: ${err.message}`);
+    }
+  });
+
+  document.getElementById("regenNarrativeBtn")?.addEventListener("click", async () => {
+    setStatus("Regenerating narrative…");
+    await loadNarrative();
+    setStatus("Narrative refreshed");
   });
 
   function setStatus(msg) {

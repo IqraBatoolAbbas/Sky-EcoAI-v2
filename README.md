@@ -25,6 +25,11 @@ RAG knowledge lives in `knowledge/*.md` and is retrieved with live fleet KPIs be
 - **Operator activity log** on Overview
 - **Impact one-pager:** `/control-tower/impact-print` (Print / Save as PDF)
 - **Voice:** mic buttons use free Web Speech API (Chrome/Edge); say “run guided demo” or “optimize fleet”
+- **NL GenAI scenarios:** Event Center text → structured disruptions (`POST /api/fleet/scenario/nl`)
+- **Carbon budget enforcement:** over-budget plans receive score penalties
+- **Judge Mode:** GenAI impact narrative + SDG scoreboard + simulated WhatsApp/email alerts
+- **Impact score:** composites deliveries protected, CO₂ avoided, and agent actions
+
 
 
 
