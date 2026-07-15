@@ -9,13 +9,26 @@
       <h2>Fleet Control Tower</h2>
       <p>Lahore seeded fleet · autonomous recovery loop</p>
     </div>
+
+    <div class="demo-rail glass-card" id="demoRail">
+      <h3>Judge demo path</h3>
+      <ol class="demo-steps" id="demoSteps">
+        <li data-step="1" class="active">Optimize plans</li>
+        <li data-step="2">Apply plan</li>
+        <li data-step="3">Trigger breakdown</li>
+        <li data-step="4">Recover & explain</li>
+        <li data-step="5">Impact report</li>
+      </ol>
+      <button class="icon-btn" id="runDemoBtn" type="button" style="width:100%;margin-top:8px;">▶ Run guided demo</button>
+    </div>
+
     <nav class="tower-nav" id="towerNav">
-      <button class="tower-nav-btn active" data-panel="overview">📊 Overview</button>
-      <button class="tower-nav-btn" data-panel="map">🗺️ Fleet Map</button>
-      <button class="tower-nav-btn" data-panel="optimize">⚡ Optimization</button>
-      <button class="tower-nav-btn" data-panel="events">🚨 Event Center</button>
-      <button class="tower-nav-btn" data-panel="copilot">🤖 Fleet Copilot</button>
-      <button class="tower-nav-btn" data-panel="impact">📈 Impact Report</button>
+      <button class="tower-nav-btn active" data-panel="overview">Overview</button>
+      <button class="tower-nav-btn" data-panel="map">Fleet Map</button>
+      <button class="tower-nav-btn" data-panel="optimize">Optimization</button>
+      <button class="tower-nav-btn" data-panel="events">Event Center</button>
+      <button class="tower-nav-btn" data-panel="copilot">Fleet Copilot</button>
+      <button class="tower-nav-btn" data-panel="impact">Impact Report</button>
     </nav>
     <div class="tower-sidebar-actions">
       <button class="primary-btn" id="resetDemoBtn" type="button">↺ Reset demo</button>
@@ -30,6 +43,10 @@
         <h1>Operations Overview</h1>
         <p>Real-time fleet KPIs and active alerts from backend state.</p>
       </header>
+      <div class="pipeline-banner glass-card" id="pipelineBanner">
+        <strong>Autonomous loop:</strong>
+        <span>Fleet input → Optimize → Disrupt → Recover → Explain impact</span>
+      </div>
       <div class="kpi-grid" id="overviewKpis"></div>
       <div class="tower-split">
         <div class="glass-card">
@@ -39,6 +56,16 @@
         <div class="glass-card">
           <h3>Active vehicles</h3>
           <div id="vehicleTable" class="data-table-wrap"></div>
+        </div>
+      </div>
+      <div class="tower-split" style="margin-top:16px;">
+        <div class="glass-card">
+          <h3>Operator activity</h3>
+          <div id="activityLog" class="timeline"></div>
+        </div>
+        <div class="glass-card">
+          <h3>Agent pulse</h3>
+          <div id="overviewTimeline" class="timeline"></div>
         </div>
       </div>
     </div>
@@ -68,6 +95,7 @@
         <button class="filter-pill" data-mode="service">Service</button>
       </div>
       <button class="primary-btn" id="optimizeBtn" type="button">Generate route plans</button>
+      <div class="opt-progress" id="optProgress"><span id="optProgressBar"></span></div>
       <div id="planComparison" class="plan-comparison-grid"></div>
     </div>
 
@@ -78,12 +106,18 @@
         <p>Simulate disruptions and apply recovery plans.</p>
       </header>
       <div class="event-controls glass-card">
-        <h3>Disruption simulator</h3>
+        <h3>Scenario presets</h3>
+        <div class="event-btn-row" id="scenarioRow">
+          <button class="icon-btn scenario-btn" data-scenario="medical_rush" type="button">Medical rush</button>
+          <button class="icon-btn scenario-btn" data-scenario="carbon_budget_breach" type="button">Carbon-budget breach</button>
+          <button class="icon-btn scenario-btn" data-scenario="ev_low_range" type="button">EV low range</button>
+        </div>
+        <h3 style="margin-top:16px;">Disruption simulator</h3>
         <div class="event-btn-row">
-          <button class="icon-btn event-btn" data-event="breakdown">🔧 Vehicle breakdown (auto-pick active)</button>
-          <button class="icon-btn event-btn" data-event="urgent_order">📦 Urgent order</button>
-          <button class="icon-btn event-btn" data-event="road_blockage">🚧 Road blockage</button>
-          <button class="icon-btn event-btn" data-event="range_warning" data-vehicle="V6">🔋 Low range (V6)</button>
+          <button class="icon-btn event-btn" data-event="breakdown">Vehicle breakdown (auto-pick)</button>
+          <button class="icon-btn event-btn" data-event="urgent_order">Urgent order</button>
+          <button class="icon-btn event-btn" data-event="road_blockage">Road blockage</button>
+          <button class="icon-btn event-btn" data-event="range_warning" data-vehicle="V6">Low range (V6)</button>
         </div>
         <div class="event-actions">
           <button class="primary-btn" id="generateRecoveryBtn" type="button">Generate recovery plans</button>
@@ -112,15 +146,17 @@
       </header>
       <div class="copilot-layout glass-card">
         <div class="copilot-suggestions">
+          <button class="filter-pill copilot-prompt" type="button">Run guided demo</button>
           <button class="filter-pill copilot-prompt" type="button">Generate fleet plans</button>
-          <button class="filter-pill copilot-prompt" type="button">Simulate breakdown on V3</button>
+          <button class="filter-pill copilot-prompt" type="button">Simulate breakdown</button>
           <button class="filter-pill copilot-prompt" type="button">Why was this plan selected?</button>
           <button class="filter-pill copilot-prompt" type="button">Show greener alternative</button>
           <button class="filter-pill copilot-prompt" type="button">Impact summary</button>
         </div>
         <div id="copilotMessages" class="copilot-messages"></div>
         <form id="copilotForm" class="copilot-form">
-          <input id="copilotInput" placeholder="Ask the Fleet Copilot…" autocomplete="off">
+          <button type="button" class="mic-btn" id="copilotMicBtn" title="Voice command (Chrome/Edge)" aria-pressed="false">🎤</button>
+          <input id="copilotInput" placeholder="Ask the Fleet Copilot… or tap mic" autocomplete="off">
           <button class="primary-btn" type="submit">Send</button>
         </form>
       </div>
@@ -131,7 +167,12 @@
       <header class="tower-header">
         <h1>Impact Report</h1>
         <p>Measurable operational and sustainability outcomes (backend-calculated).</p>
+        <a class="primary-btn" href="/control-tower/impact-print" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none;margin-top:8px;">Export one-pager (Print/PDF)</a>
       </header>
+      <div class="delta-strip glass-card" id="deltaStrip" hidden>
+        <h3>Before → After</h3>
+        <div class="delta-grid" id="deltaGrid"></div>
+      </div>
       <div class="kpi-grid" id="impactKpis"></div>
       <div class="glass-card">
         <h3>Disruption history</h3>
@@ -146,5 +187,6 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/control_tower.css') }}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="{{ url_for('static', filename='js/voice_commands.js') }}"></script>
 <script src="{{ url_for('static', filename='js/control_tower.js') }}"></script>
 {% endblock %}

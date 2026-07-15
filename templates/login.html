@@ -36,6 +36,11 @@
       <button type="submit" class="primary-btn" style="width:100%;" id="loginSubmit">Log in</button>
     </form>
 
+    <button type="button" class="primary-btn" id="demoLoginBtn"
+      style="width:100%; margin-top:12px; background:transparent; border:1px solid var(--stratos); color:var(--stratos);">
+      Continue as Demo Operator → Control Tower
+    </button>
+
     <div class="auth-divider">or continue with</div>
     <div class="social-auth-row">
       <button class="social-btn" type="button" onclick="SkyToast.show('Google OAuth isn\'t connected yet — use email for now.', 'default')">🔵 Google</button>
@@ -86,6 +91,33 @@
           localStorage.setItem("sky_remembered_email", emailInput.value.trim());
         } else {
           localStorage.removeItem("sky_remembered_email");
+        }
+      });
+    }
+
+    // 4. Demo Operator fast-path
+    const demoBtn = document.getElementById("demoLoginBtn");
+    if (demoBtn) {
+      demoBtn.addEventListener("click", async () => {
+        demoBtn.disabled = true;
+        demoBtn.textContent = "Opening demo…";
+        try {
+          const res = await fetch("/api/demo-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: "{}",
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Demo login failed");
+          window.location.href = data.redirect || "/control-tower";
+        } catch (err) {
+          demoBtn.disabled = false;
+          demoBtn.textContent = "Continue as Demo Operator → Control Tower";
+          const banner = document.getElementById("loginError");
+          if (banner) {
+            banner.textContent = err.message;
+            banner.style.display = "block";
+          }
         }
       });
     }

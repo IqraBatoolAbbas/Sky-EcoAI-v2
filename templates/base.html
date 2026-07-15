@@ -6,6 +6,7 @@
   <meta name="description" content="Sky.EcoAI — plan routes, compare powertrains, and track the carbon you avoid.">
   <title>{% block title %}Sky.EcoAI — Sustainable Fleet Intelligence{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sky_assistant.css') }}">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍃</text></svg>">
 </head>
 <body data-user-id="{{ session.user.email if session.user else 'guest' }}" 
@@ -93,6 +94,8 @@
   </footer>
 
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/voice_commands.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/sky_assistant.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

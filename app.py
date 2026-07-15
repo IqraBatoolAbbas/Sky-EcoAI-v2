@@ -10,6 +10,8 @@ from fleet_store import FleetStore
 from fleet_optimizer import FleetOptimizer
 from disruption_agent import DisruptionAgent
 from fleet_copilot import FleetCopilot
+from rag_store import RagStore
+from actor_util import current_actor
 import html
 import re
 import secrets
@@ -17,7 +19,8 @@ from datetime import timedelta
 
 app = Flask(__name__)
 app.permanent_session_lifetime = timedelta(days=30)
-app.secret_key = secrets.token_hex(32)  # 🔐 Swap for a fixed env-var secret in production
+# Stable secret keeps sessions alive across restarts; override with FLASK_SECRET_KEY in prod
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "sky-ecoai-hackathon-dev-secret-change-me"
 
 agent = EcoRouteAgent()
 users = UserStore()
@@ -27,7 +30,28 @@ admin_store = AdminStore()
 fleet_store = FleetStore()
 fleet_optimizer = FleetOptimizer()
 disruption_agent = DisruptionAgent(fleet_store)
-fleet_copilot = FleetCopilot(fleet_store, disruption_agent)
+rag_store = RagStore()
+fleet_copilot = FleetCopilot(fleet_store, disruption_agent, rag_store)
+
+
+def login_required_api(fn):
+    """Require session user (including demo guest) for mutating / private APIs."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not session.get("user"):
+            return jsonify({"error": "Authentication required. Log in or use Demo Operator."}), 401
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def page_login_required(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login_view", next=request.path))
+        return view(*args, **kwargs)
+    return wrapper
+
 
 
 # Mock Class dynamic fallback layout sync check karne ke liye (Bina code delete kiye safe testing helper)
@@ -77,6 +101,20 @@ def control_tower_view():
     if not session.get("user"):
         return redirect(url_for("login_view", next="/control-tower"))
     return render_template("control_tower.html")
+
+@app.get("/control-tower/impact-print")
+def control_tower_impact_print():
+    if not session.get("user"):
+        return redirect(url_for("login_view", next="/control-tower/impact-print"))
+    summary = fleet_store.get_impact_summary()
+    dash = fleet_store.get_dashboard()
+    return render_template(
+        "impact_print.html",
+        summary=summary,
+        dash=dash,
+        actor=current_actor(),
+        decisions=fleet_store.get_decisions()[-8:],
+    )
 
 @app.get("/dashboard")
 def dashboard_view():
@@ -155,36 +193,31 @@ def api_login():
     password = data.get("password", "")
 
     try:
-        # 🎯 CRITICAL LAYER: Safely verify without allowing backend structure collisions
-        try:
-            user = users.verify_user(email, password)
-        except AttributeError as ae:
-            # Agar list parsing error back-store (.get attribute) se crash throw kare:
-            import json, os
-            file_path = "data/users.json" if os.path.exists("data/users.json") else "data/user.json"
-            
-            with open(file_path, "r") as f:
-                user_list = json.load(f)
-                
-            # Strict list normalization fall-back loop iteration
-            user = None
-            if isinstance(user_list, list):
-                for u in user_list:
-                    if u.get("email", "").strip().lower() == email:
-                        # Assuming password validation passes for recovery layout match
-                        user = u
-                        break
-            if not user:
-                raise ValidationError("Invalid email or password.")
-
+        user = users.verify_user(email, password)
         session["user"] = user
         session.permanent = True
         return jsonify(user), 200
-        
     except ValidationError as e:
         return jsonify({"error": str(e)}), 401
     except Exception as e:
         return jsonify({"error": f"Login Pipeline Error: {str(e)}"}), 500
+
+
+@app.post("/api/demo-login")
+def api_demo_login():
+    """Hackathon fast-path: session without signup."""
+    user = {
+        "name": "Demo Operator",
+        "email": "demo@sky-ecoai.local",
+        "initials": "DO",
+        "plan": "pro",
+        "is_demo": True,
+    }
+    session["user"] = user
+    session["is_premium"] = True
+    session["is_pro"] = True
+    session.permanent = True
+    return jsonify({"user": user, "redirect": "/control-tower"}), 200
 
 @app.post("/api/logout")
 def api_logout():
@@ -497,14 +530,17 @@ def api_admin_respond_ticket(ticket_id):
 # 🏗️ FLEET CONTROL TOWER — Hackathon MVP APIs
 # ------------------------------------------------------------------
 @app.get("/api/fleet/dashboard")
+@login_required_api
 def api_fleet_dashboard():
     return jsonify(fleet_store.get_dashboard())
 
 @app.get("/api/fleet/vehicles")
+@login_required_api
 def api_fleet_vehicles():
     return jsonify({"vehicles": fleet_store.list_vehicles()})
 
 @app.post("/api/fleet/vehicles")
+@login_required_api
 def api_fleet_create_vehicle():
     data = request.get_json(silent=True) or {}
     try:
@@ -514,10 +550,12 @@ def api_fleet_create_vehicle():
         return jsonify({"error": str(e)}), 400
 
 @app.get("/api/fleet/orders")
+@login_required_api
 def api_fleet_orders():
     return jsonify({"orders": fleet_store.list_orders()})
 
 @app.post("/api/fleet/orders")
+@login_required_api
 def api_fleet_create_order():
     data = request.get_json(silent=True) or {}
     if "lat" not in data or "lng" not in data:
@@ -529,10 +567,12 @@ def api_fleet_create_order():
         return jsonify({"error": str(e)}), 400
 
 @app.get("/api/fleet/state")
+@login_required_api
 def api_fleet_state():
     return jsonify(fleet_store.get_state())
 
 @app.post("/api/fleet/optimize")
+@login_required_api
 def api_fleet_optimize():
     data = request.get_json(silent=True) or {}
     mode = data.get("mode", "all")
@@ -550,9 +590,15 @@ def api_fleet_optimize():
             selected=ranked[0],
             explanation=f"Generated {len(ranked)} plan(s); recommended {ranked[0].get('label')}.",
         )
+    fleet_store.log_activity(
+        current_actor(),
+        "optimize",
+        f"Generated {len(ranked)} plan(s); recommended {ranked[0].get('label') if ranked else 'none'}",
+    )
     return jsonify({"plans": ranked, "recommended_plan_id": ranked[0]["id"] if ranked else None})
 
 @app.post("/api/fleet/plans/<plan_id>/apply")
+@login_required_api
 def api_fleet_apply_plan(plan_id):
     try:
         plan = fleet_store.apply_plan(plan_id)
@@ -563,11 +609,13 @@ def api_fleet_apply_plan(plan_id):
             explanation=f"Operator applied {plan.get('label', plan_id)}.",
             approval_status="approved",
         )
+        fleet_store.log_activity(current_actor(), "apply_plan", f"Applied {plan.get('label', plan_id)}")
         return jsonify(plan)
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
 
 @app.post("/api/fleet/events")
+@login_required_api
 def api_fleet_events():
     data = request.get_json(silent=True) or {}
     event_type = data.get("type", "").strip().lower()
@@ -584,11 +632,13 @@ def api_fleet_events():
             result = disruption_agent.simulate_range_warning(data.get("vehicle_id", "V6"))
         else:
             return jsonify({"error": f"Unknown event type: {event_type}"}), 400
+        fleet_store.log_activity(current_actor(), f"event:{event_type}", str(result)[:180])
         return jsonify(result), 201
     except (KeyError, ValueError, TypeError) as e:
         return jsonify({"error": str(e)}), 400
 
 @app.post("/api/fleet/recovery")
+@login_required_api
 def api_fleet_recovery():
     data = request.get_json(silent=True) or {}
     trigger = data.get("trigger", "disruption")
@@ -597,17 +647,25 @@ def api_fleet_recovery():
     if auto_apply and result.get("recommended_plan_id"):
         applied = disruption_agent.apply_recovery_plan(result["recommended_plan_id"], auto=True)
         result["applied"] = applied
+    fleet_store.log_activity(
+        current_actor(),
+        "recovery",
+        f"trigger={trigger}; auto={auto_apply}; recommended={result.get('recommended_plan_id')}",
+    )
     return jsonify(result)
 
 @app.get("/api/fleet/decisions")
+@login_required_api
 def api_fleet_decisions():
     return jsonify({"decisions": fleet_store.get_decisions()})
 
 @app.get("/api/fleet/impact")
+@login_required_api
 def api_fleet_impact():
     return jsonify(fleet_store.get_impact_summary())
 
 @app.post("/api/fleet/copilot")
+@login_required_api
 def api_fleet_copilot():
     data = request.get_json(silent=True) or {}
     message = data.get("message", "").strip()
@@ -615,12 +673,61 @@ def api_fleet_copilot():
         return jsonify({"error": "message is required."}), 400
     confirm = bool(data.get("confirm", False))
     pending_action = data.get("pending_action")
-    return jsonify(fleet_copilot.process_message(message, confirm_action=confirm, pending_action=pending_action))
+    return jsonify(fleet_copilot.process_message(
+        message, confirm_action=confirm, pending_action=pending_action, allow_mutations=True
+    ))
 
 @app.post("/api/fleet/reset-demo")
+@login_required_api
 def api_fleet_reset_demo():
     state = fleet_store.reset_demo()
+    fleet_store.log_activity(current_actor(), "reset_demo", "Restored Lahore seed scenario")
     return jsonify({"ok": True, "message": "Demo scenario reset.", "depot": state.get("depot")})
+
+
+@app.post("/api/fleet/scenarios")
+@login_required_api
+def api_fleet_scenarios():
+    data = request.get_json(silent=True) or {}
+    scenario = data.get("scenario", "").strip()
+    if not scenario:
+        return jsonify({
+            "error": "scenario is required",
+            "available": ["medical_rush", "carbon_budget_breach", "ev_low_range"],
+        }), 400
+    try:
+        result = disruption_agent.run_scenario(scenario)
+        fleet_store.log_activity(current_actor(), "scenario", result.get("title") or scenario)
+        return jsonify(result), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.get("/api/fleet/delta")
+@login_required_api
+def api_fleet_delta():
+    return jsonify({"delta": fleet_store.get_latest_delta(), "baseline": fleet_store.get_state().get("baseline_snapshot")})
+
+
+@app.get("/api/fleet/activity")
+@login_required_api
+def api_fleet_activity():
+    return jsonify({"activity": fleet_store.get_dashboard().get("activity_log", [])})
+
+
+@app.post("/api/help/chat")
+def api_help_chat():
+    """Floating Sky Assistant — public RAG Q&A (read-only)."""
+    data = request.get_json(silent=True) or {}
+    message = data.get("message", "").strip()
+    if not message:
+        return jsonify({"error": "message is required."}), 400
+    return jsonify(fleet_copilot.answer_help(message))
+
+
+@app.get("/api/help/sources")
+def api_help_sources():
+    return jsonify({"chunks": rag_store.reload(), "knowledge_dir": "knowledge/"})
 
 
 # ------------------------------------------------------------------
@@ -818,6 +925,7 @@ def analyze_fleet():
 
 
 @app.route('/debug-routes')
+@login_required_api
 def debug_routes():
     import urllib
     output = []

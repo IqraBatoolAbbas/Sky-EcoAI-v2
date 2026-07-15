@@ -4,14 +4,29 @@ Sky.EcoAI is an **Autonomous Green Fleet Control Tower** for climate & sustainab
 
 Legacy partner features (auth, single A→B route tool, ledger, admin) remain available alongside the Control Tower.
 
-## Demo loop
+## Auth & APIs (Control Tower)
 
-```
-Load Lahore fleet → Optimize (Economy/Green/Service) → Apply plan →
-Trigger breakdown → Generate recovery → Apply → Copilot explains → Impact report
-```
+| Need | What to use |
+|------|-------------|
+| Judge quick start | Login → **Continue as Demo Operator** (`POST /api/demo-login`) |
+| Full account | Signup / login session cookie |
+| Admin | `/admin/login` (separate admin session) |
+| Fleet APIs | Require login/demo session — all `/api/fleet/*` |
+| Floating help | Public `POST /api/help/chat` (RAG, read-only) |
+| Optional LLM | `GEMINI_API_KEY` or `OPENAI_API_KEY` for richer grounded answers |
+| Session secret | `FLASK_SECRET_KEY` env (stable default for local hackathon) |
 
-**Primary demo URL (local):** `http://127.0.0.1:5000/control-tower` (login required)
+RAG knowledge lives in `knowledge/*.md` and is retrieved with live fleet KPIs before answering.
+
+### Extra Control Tower extras
+
+- **Scenario presets:** Medical rush, Carbon-budget breach, EV low range (`POST /api/fleet/scenarios`)
+- **Before → After KPIs** on Impact Report after recovery
+- **Operator activity log** on Overview
+- **Impact one-pager:** `/control-tower/impact-print` (Print / Save as PDF)
+- **Voice:** mic buttons use free Web Speech API (Chrome/Edge); say “run guided demo” or “optimize fleet”
+
+
 
 ## What's new (fleet control tower)
 

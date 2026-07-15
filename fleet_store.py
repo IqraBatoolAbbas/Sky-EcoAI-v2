@@ -44,6 +44,9 @@ class FleetStore:
                 "events": [],
                 "decisions": [],
                 "disruptions": [],
+                "baseline_snapshot": None,
+                "latest_delta": None,
+                "activity_log": [],
                 "updated_at": self._now(),
             }
             self._write(state)
@@ -91,6 +94,7 @@ class FleetStore:
             },
             "alerts": alerts,
             "latest_events": state.get("events", [])[-5:],
+            "activity_log": list(reversed(state.get("activity_log", [])[-12:])),
             "depot": state.get("depot"),
             "updated_at": state.get("updated_at"),
         }
@@ -180,9 +184,83 @@ class FleetStore:
                         order_map[oid]["status"] = "assigned"
 
             state["active_plan"] = plan
+            # Capture baseline KPIs the first time a plan is applied (for before/after deltas)
+            if not state.get("baseline_snapshot"):
+                state["baseline_snapshot"] = self._plan_snapshot(plan, label="baseline")
             state["updated_at"] = self._now()
             self._write(state)
             return plan
+
+    @staticmethod
+    def _plan_snapshot(plan: dict[str, Any] | None, label: str = "current") -> dict[str, Any]:
+        plan = plan or {}
+        return {
+            "label": label,
+            "distance_km": plan.get("total_distance_km", 0),
+            "cost_pkr": plan.get("total_operating_cost_pkr", 0),
+            "co2_kg": plan.get("total_co2_kg", 0),
+            "deliveries": plan.get("deliveries_assigned", 0),
+            "mode": plan.get("mode"),
+            "plan_id": plan.get("id"),
+        }
+
+    def capture_baseline(self, force: bool = False) -> dict[str, Any]:
+        with self._lock:
+            state = self._read()
+            plan = state.get("active_plan")
+            if not plan:
+                raise ValueError("No active plan to snapshot")
+            if force or not state.get("baseline_snapshot"):
+                state["baseline_snapshot"] = self._plan_snapshot(plan, label="baseline")
+                state["updated_at"] = self._now()
+                self._write(state)
+            return state["baseline_snapshot"]
+
+    def compute_delta(self, after_plan: dict[str, Any] | None = None) -> dict[str, Any]:
+        with self._lock:
+            state = self._read()
+            before = state.get("baseline_snapshot") or self._plan_snapshot(None, "baseline")
+            after = self._plan_snapshot(after_plan or state.get("active_plan"), label="after")
+            delta = {
+                "before": before,
+                "after": after,
+                "distance_km": round((after["distance_km"] or 0) - (before["distance_km"] or 0), 2),
+                "cost_pkr": round((after["cost_pkr"] or 0) - (before["cost_pkr"] or 0), 2),
+                "co2_kg": round((after["co2_kg"] or 0) - (before["co2_kg"] or 0), 3),
+                "deliveries": (after["deliveries"] or 0) - (before["deliveries"] or 0),
+            }
+            state["latest_delta"] = delta
+            state["updated_at"] = self._now()
+            self._write(state)
+            return delta
+
+    def set_carbon_budget(self, kg: float) -> float:
+        with self._lock:
+            state = self._read()
+            state["carbon_budget_kg"] = float(kg)
+            state["updated_at"] = self._now()
+            self._write(state)
+            return state["carbon_budget_kg"]
+
+    def get_latest_delta(self) -> dict[str, Any] | None:
+        return self.get_state().get("latest_delta")
+
+    def log_activity(self, actor: str, action: str, detail: str = "") -> dict[str, Any]:
+        with self._lock:
+            state = self._read()
+            entry = {
+                "id": f"ACT-{uuid.uuid4().hex[:8]}",
+                "timestamp": self._now(),
+                "actor": actor or "Operator",
+                "action": action,
+                "detail": detail,
+            }
+            state.setdefault("activity_log", []).append(entry)
+            # keep last 80 only
+            state["activity_log"] = state["activity_log"][-80:]
+            state["updated_at"] = self._now()
+            self._write(state)
+            return entry
 
     def log_event(self, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
@@ -289,16 +367,20 @@ class FleetStore:
         decisions = state.get("decisions", [])
         events = state.get("events", [])
         active = state.get("active_plan") or {}
-        baseline = next((d for d in decisions if d.get("trigger") == "initial_optimization"), None)
-        baseline_co2 = (baseline or {}).get("selected_plan", {}).get("total_co2_kg", 0)
+        baseline = state.get("baseline_snapshot") or {}
         current_co2 = active.get("total_co2_kg", 0)
+        baseline_co2 = baseline.get("co2_kg", 0)
         return {
             "km_planned": active.get("total_distance_km", 0),
             "estimated_cost_pkr": active.get("total_operating_cost_pkr", 0),
             "estimated_co2_kg": current_co2,
             "co2_avoided_vs_baseline_kg": round(max(0, baseline_co2 - current_co2), 3),
             "deliveries_protected": active.get("deliveries_assigned", 0),
-            "disruptions_resolved": sum(1 for e in events if e.get("type") in ("breakdown", "urgent_order", "road_blockage", "range_warning")),
+            "disruptions_resolved": sum(
+                1 for e in events if e.get("type") in ("breakdown", "urgent_order", "road_blockage", "range_warning")
+            ),
             "agent_actions": len(decisions),
             "disruption_history": events[-10:],
+            "delta": state.get("latest_delta"),
+            "baseline": baseline,
         }

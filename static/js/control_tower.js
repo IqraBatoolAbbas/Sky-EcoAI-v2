@@ -6,22 +6,42 @@ document.addEventListener("DOMContentLoaded", () => {
   let pendingCopilotConfirm = null;
 
   const fmt = (n, d = 1) => (n == null ? "—" : Number(n).toLocaleString("en-PK", { maximumFractionDigits: d }));
+  let demoStep = 1;
+
   const api = async (url, opts = {}) => {
     const res = await fetch(url, { headers: { "Content-Type": "application/json", Accept: "application/json" }, ...opts });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      window.location.href = "/login?next=/control-tower";
+      throw new Error(data.error || "Authentication required");
+    }
     if (!res.ok) throw new Error(data.error || res.statusText);
     return data;
   };
 
+  function goPanel(name) {
+    document.querySelectorAll(".tower-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.panel === name));
+    document.querySelectorAll(".tower-panel").forEach((p) => p.classList.toggle("active", p.id === `panel-${name}`));
+    if (name === "map") setTimeout(() => fleetMap?.invalidateSize(), 200);
+  }
+
+  function markDemoStep(step) {
+    demoStep = step;
+    document.querySelectorAll("#demoSteps li").forEach((li) => {
+      const s = Number(li.dataset.step);
+      li.classList.toggle("active", s === step);
+      li.classList.toggle("done", s < step);
+    });
+  }
+
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+
   /* ---------- Navigation ---------- */
   document.querySelectorAll(".tower-nav-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".tower-nav-btn").forEach((b) => b.classList.remove("active"));
-      document.querySelectorAll(".tower-panel").forEach((p) => p.classList.remove("active"));
-      btn.classList.add("active");
-      document.getElementById(`panel-${btn.dataset.panel}`).classList.add("active");
-      if (btn.dataset.panel === "map") setTimeout(() => fleetMap?.invalidateSize(), 200);
-    });
+    btn.addEventListener("click", () => goPanel(btn.dataset.panel));
   });
 
   /* ---------- Overview ---------- */
@@ -44,6 +64,19 @@ document.addEventListener("DOMContentLoaded", () => {
       : '<li class="good">No active alerts — fleet nominal.</li>';
     document.getElementById("alertList").innerHTML = alerts;
 
+    const activity = dash.activity_log || [];
+    const actEl = document.getElementById("activityLog");
+    if (actEl) {
+      actEl.innerHTML = activity.length
+        ? activity.map((a) => `
+          <div class="timeline-item">
+            <time>${new Date(a.timestamp).toLocaleString()}</time>
+            <strong>${a.actor}</strong> — ${a.action}
+            <div style="color:var(--text-faint);margin-top:4px">${a.detail || ""}</div>
+          </div>`).join("")
+        : "<p style='color:var(--text-muted);font-size:13px'>No operator actions yet.</p>";
+    }
+
     const vehicles = state.vehicles || [];
     document.getElementById("vehicleTable").innerHTML = `
       <table class="data-table">
@@ -59,9 +92,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
     renderMap(state);
     renderAtRisk(state.orders);
-    renderDecisions(await api("/api/fleet/decisions"));
+    const decisionsData = await api("/api/fleet/decisions");
+    renderDecisions(decisionsData);
+    const overviewTl = document.getElementById("overviewTimeline");
+    if (overviewTl) {
+      overviewTl.innerHTML = document.getElementById("decisionTimeline").innerHTML;
+    }
     renderImpact(await api("/api/fleet/impact"));
     renderPlans(state.candidate_plans || []);
+
+    // Infer demo step from state
+    if (state.active_plan && (state.events || []).some((e) => e.type === "recovery_applied")) markDemoStep(5);
+    else if ((state.events || []).some((e) => e.type === "breakdown")) markDemoStep(4);
+    else if (state.active_plan) markDemoStep(3);
+    else if ((state.candidate_plans || []).length) markDemoStep(2);
+    else markDemoStep(1);
   }
 
   function kpi(label, val, cls = "", mono = false) {
@@ -131,9 +176,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("optimizeBtn").addEventListener("click", async () => {
     setStatus("Optimizing fleet…");
+    const prog = document.getElementById("optProgress");
+    const bar = document.getElementById("optProgressBar");
+    prog?.classList.add("visible");
+    if (bar) bar.style.width = "35%";
     const data = await api("/api/fleet/optimize", { method: "POST", body: JSON.stringify({ mode: selectedMode }) });
+    if (bar) bar.style.width = "100%";
     renderPlans(data.plans || []);
+    markDemoStep(2);
     await refreshOverview();
+    setTimeout(() => prog?.classList.remove("visible"), 600);
     setStatus("Plans generated");
   });
 
@@ -158,13 +210,29 @@ document.addEventListener("DOMContentLoaded", () => {
     el.querySelectorAll(".apply-plan-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         await api(`/api/fleet/plans/${btn.dataset.planId}/apply`, { method: "POST", body: "{}" });
+        markDemoStep(3);
         await refreshOverview();
+        goPanel("map");
         setStatus("Plan applied");
       });
     });
   }
 
   /* ---------- Events ---------- */
+  document.querySelectorAll(".scenario-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const scenario = btn.dataset.scenario;
+      setStatus(`Running scenario: ${scenario}…`);
+      const data = await api("/api/fleet/scenarios", {
+        method: "POST",
+        body: JSON.stringify({ scenario }),
+      });
+      await refreshOverview();
+      goPanel("events");
+      setStatus(`Scenario ready: ${data.title || scenario}`);
+    });
+  });
+
   document.querySelectorAll(".event-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const type = btn.dataset.event;
@@ -185,6 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       setStatus(`Simulating ${type}…`);
       await api("/api/fleet/events", { method: "POST", body: JSON.stringify(body) });
+      if (type === "breakdown") markDemoStep(4);
       await refreshOverview();
       setStatus("Disruption simulated");
     });
@@ -198,7 +267,9 @@ document.addEventListener("DOMContentLoaded", () => {
       body: JSON.stringify({ trigger: "event_center", auto_apply: auto }),
     });
     renderPlans(data.recovery_plans || []);
+    markDemoStep(auto ? 5 : 4);
     await refreshOverview();
+    if (auto) goPanel("impact");
     setStatus(auto ? "Recovery auto-applied" : "Recovery plans ready");
   });
 
@@ -232,6 +303,30 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   async function sendCopilot(message, confirm = false) {
+    const lower = message.trim().toLowerCase();
+    // Voice / prompt shortcuts that drive the tower UI
+    if (/guided demo|run demo|start demo/.test(lower)) {
+      appendMsg(message, "user");
+      appendMsg("Starting guided demo…", "bot");
+      document.getElementById("runDemoBtn")?.click();
+      return;
+    }
+    if (/reset demo|reset scenario/.test(lower)) {
+      appendMsg(message, "user");
+      await api("/api/fleet/reset-demo", { method: "POST", body: "{}" });
+      markDemoStep(1);
+      await refreshOverview();
+      appendMsg("Demo reset to Lahore seed.", "bot");
+      return;
+    }
+    if (/^optimize\b|generate (fleet )?plans|optimize fleet/.test(lower)) {
+      appendMsg(message, "user");
+      goPanel("optimize");
+      document.getElementById("optimizeBtn")?.click();
+      appendMsg("Optimization Studio is generating Economy / Green / Service plans.", "bot");
+      return;
+    }
+
     appendMsg(message, "user");
     const data = await api("/api/fleet/copilot", {
       method: "POST",
@@ -265,6 +360,15 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => sendCopilot(btn.textContent.trim()));
   });
 
+  // Free browser voice (Web Speech API) — Whisper optional later
+  if (window.SkyVoice) {
+    SkyVoice.attachMicButton(
+      document.getElementById("copilotMicBtn"),
+      document.getElementById("copilotInput"),
+      { onSubmit: (t) => sendCopilot(t) }
+    );
+  }
+
   /* ---------- Impact ---------- */
   function renderImpact(summary) {
     document.getElementById("impactKpis").innerHTML = [
@@ -277,19 +381,86 @@ document.addEventListener("DOMContentLoaded", () => {
       kpi("Agent actions", summary.agent_actions || 0),
     ].join("");
 
+    renderDelta(summary.delta);
+
     const hist = summary.disruption_history || [];
     document.getElementById("disruptionHistory").innerHTML = hist.length
       ? `<ul class="alert-list">${hist.map((e) => `<li>${e.type} · ${new Date(e.timestamp).toLocaleString()}</li>`).join("")}</ul>`
       : "<p style='color:var(--text-muted);font-size:13px'>No disruptions recorded yet.</p>";
   }
 
-  /* ---------- Reset ---------- */
+  function renderDelta(delta) {
+    const strip = document.getElementById("deltaStrip");
+    const grid = document.getElementById("deltaGrid");
+    if (!strip || !grid) return;
+    if (!delta || !delta.before) {
+      strip.hidden = true;
+      return;
+    }
+    strip.hidden = false;
+    const rows = [
+      ["Distance (km)", delta.distance_km, delta.before.distance_km, delta.after.distance_km, true],
+      ["Cost (PKR)", delta.cost_pkr, delta.before.cost_pkr, delta.after.cost_pkr, true],
+      ["Est. CO₂e (kg)", delta.co2_kg, delta.before.co2_kg, delta.after.co2_kg, true],
+      ["Deliveries", delta.deliveries, delta.before.deliveries, delta.after.deliveries, false],
+    ];
+    grid.innerHTML = rows.map(([label, d, b, a, lowerBetter]) => {
+      const better = lowerBetter ? d <= 0 : d >= 0;
+      const sign = d > 0 ? "+" : "";
+      return `<div class="delta-card">
+        <small>${label}</small>
+        <div class="delta-val ${better ? "better" : "worse"}">${sign}${fmt(d, 2)}</div>
+        <div class="delta-detail">${fmt(b, 2)} → ${fmt(a, 2)}</div>
+      </div>`;
+    }).join("");
+  }
+
+  /* ---------- Reset + guided demo ---------- */
   document.getElementById("resetDemoBtn").addEventListener("click", async () => {
     if (!confirm("Reset demo to Lahore seed scenario?")) return;
     await api("/api/fleet/reset-demo", { method: "POST", body: "{}" });
     copilotMessages.innerHTML = "";
+    markDemoStep(1);
     await refreshOverview();
     setStatus("Demo reset complete");
+  });
+
+  document.getElementById("runDemoBtn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("runDemoBtn");
+    btn.disabled = true;
+    try {
+      setStatus("Guided demo running…");
+      await api("/api/fleet/reset-demo", { method: "POST", body: "{}" });
+      markDemoStep(1);
+      goPanel("optimize");
+      await sleep(400);
+      const opt = await api("/api/fleet/optimize", { method: "POST", body: JSON.stringify({ mode: "all" }) });
+      renderPlans(opt.plans || []);
+      markDemoStep(2);
+      await sleep(500);
+      const pid = opt.recommended_plan_id || opt.plans?.[0]?.id;
+      await api(`/api/fleet/plans/${pid}/apply`, { method: "POST", body: "{}" });
+      markDemoStep(3);
+      goPanel("map");
+      await sleep(700);
+      goPanel("events");
+      await api("/api/fleet/events", { method: "POST", body: JSON.stringify({ type: "breakdown" }) });
+      markDemoStep(4);
+      await sleep(500);
+      const rec = await api("/api/fleet/recovery", {
+        method: "POST",
+        body: JSON.stringify({ trigger: "guided_demo", auto_apply: true }),
+      });
+      renderPlans(rec.recovery_plans || []);
+      markDemoStep(5);
+      goPanel("impact");
+      await refreshOverview();
+      setStatus("Guided demo complete — ask Copilot why the plan was selected");
+    } catch (err) {
+      setStatus(`Demo error: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   function setStatus(msg) {

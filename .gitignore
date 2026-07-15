@@ -10,5 +10,8 @@ __pycache__/
 .pytest_cache/
 plan_extracted.txt
 data/fleet_state.json
+data/users.json
 Sky_EcoAI_Team_Implementation_Plan.docx
 docs/IMPLEMENTATION_STATUS.md
+.pytest_cache/
+

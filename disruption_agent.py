@@ -118,7 +118,62 @@ class DisruptionAgent:
             approval_status="auto_applied" if auto else "approved",
         )
         self.store.log_event("recovery_applied", {"plan_id": plan_id, "auto": auto})
-        return {"plan": plan, "decision": decision}
+        delta = self.store.compute_delta(plan)
+        return {"plan": plan, "decision": decision, "delta": delta}
+
+    def run_scenario(self, scenario: str) -> dict[str, Any]:
+        """One-click judge scenarios."""
+        key = (scenario or "").strip().lower().replace("-", "_").replace(" ", "_")
+        state = self.store.get_state()
+
+        if key in ("medical_rush", "medical"):
+            result = self.insert_urgent_order(
+                {
+                    "customer": "Emergency trauma pack — Shaukat Khanum",
+                    "lat": 31.5620,
+                    "lng": 74.3300,
+                    "weight_kg": 35,
+                    "deadline_minutes": 35,
+                    "priority": "high",
+                }
+            )
+            self.store.log_event("scenario", {"scenario": "medical_rush"})
+            return {"scenario": "medical_rush", "title": "Medical rush", "result": result}
+
+        if key in ("carbon_budget_breach", "carbon", "carbon_breach"):
+            # Tighten budget below current/active plan emissions so Overview flags breach
+            active = state.get("active_plan") or {}
+            current = float(active.get("total_co2_kg") or 12)
+            budget = round(max(1.0, current * 0.55), 2)
+            new_budget = self.store.set_carbon_budget(budget)
+            event = self.store.log_event(
+                "carbon_budget_breach",
+                {"carbon_budget_kg": new_budget, "active_co2_kg": current},
+            )
+            return {
+                "scenario": "carbon_budget_breach",
+                "title": "Carbon-budget breach",
+                "result": {"carbon_budget_kg": new_budget, "active_co2_kg": current, "event": event},
+            }
+
+        if key in ("ev_low_range", "ev_range", "low_range"):
+            # Prefer an electric vehicle that currently has assignments
+            assigned = {}
+            for o in state.get("orders", []):
+                vid = o.get("assigned_vehicle")
+                if vid:
+                    assigned[vid] = assigned.get(vid, 0) + 1
+            evs = [v for v in state.get("vehicles", []) if v.get("engine_type") == "electric"]
+            pick = None
+            for v in sorted(evs, key=lambda x: assigned.get(x["id"], 0), reverse=True):
+                pick = v["id"]
+                break
+            pick = pick or "V6"
+            result = self.simulate_range_warning(pick)
+            self.store.log_event("scenario", {"scenario": "ev_low_range", "vehicle_id": pick})
+            return {"scenario": "ev_low_range", "title": "EV low range", "result": result}
+
+        raise ValueError(f"Unknown scenario: {scenario}")
 
     def _build_explanation(self, trigger: str, plans: list[dict[str, Any]], at_risk: list[dict]) -> str:
         if not plans:

@@ -1,14 +1,15 @@
-"""AI Fleet Copilot — structured tool calls with LLM fallback."""
+"""AI Fleet Copilot — structured tool calls with RAG grounding + LLM fallback."""
 
 from __future__ import annotations
 
 import json
 import os
-from typing import Any, Callable
+from typing import Any
 
 from disruption_agent import DisruptionAgent
 from fleet_optimizer import FleetOptimizer
 from fleet_store import FleetStore
+from rag_store import RagStore
 
 
 class FleetCopilot:
@@ -23,28 +24,73 @@ class FleetCopilot:
         {"name": "apply_recovery_plan", "description": "Apply a selected recovery plan"},
         {"name": "generate_impact_summary", "description": "Summarize operational and sustainability impact"},
         {"name": "explain_active_plan", "description": "Explain the currently active fleet plan"},
+        {"name": "rag_retrieve", "description": "Retrieve grounded knowledge + live fleet facts"},
     ]
 
     def __init__(
         self,
         store: FleetStore | None = None,
         disruption: DisruptionAgent | None = None,
+        rag: RagStore | None = None,
     ) -> None:
         self.store = store or FleetStore()
         self.disruption = disruption or DisruptionAgent(self.store)
         self.optimizer = FleetOptimizer()
+        self.rag = rag or RagStore()
+
+    def answer_help(self, message: str) -> dict[str, Any]:
+        """RAG-first help path for the floating Sky Assistant (non-mutating)."""
+        msg = message.strip().lower()
+        greetings = {"hi", "hello", "hey", "yo", "salam", "hola", "help"}
+        if msg in greetings or msg.rstrip("!") in greetings:
+            return {
+                "message": message,
+                "reply": (
+                    "Hey — I'm Sky Assistant. Ask about the demo loop, Economy/Green/Service modes, "
+                    "breakdown recovery, carbon estimates, or how to open Control Tower.\n\n"
+                    "Tip: on Login, use Continue as Demo Operator, then press ▶ Run guided demo."
+                ),
+                "rag": {"sources": [], "chunk_count": len(self.rag.chunks)},
+                "tool_calls": [{"tool": "rag_retrieve", "result": {"sources": 0}}],
+                "mode": "help",
+            }
+        ctx = self.rag.build_context(message, self.store, top_k=4)
+        grounded = self._grounded_answer(message, ctx)
+        return {
+            "message": message,
+            "reply": grounded,
+            "rag": {
+                "sources": [{"id": d["id"], "source": d["source"], "score": d["score"]} for d in ctx["retrieved"]],
+                "chunk_count": ctx["chunk_count"],
+            },
+            "tool_calls": [{"tool": "rag_retrieve", "result": {"sources": len(ctx["retrieved"])}}],
+            "mode": "help",
+        }
 
     def process_message(
         self,
         message: str,
         confirm_action: bool = False,
         pending_action: str | None = None,
+        allow_mutations: bool = True,
     ) -> dict[str, Any]:
         msg = message.strip().lower()
         tool_calls: list[dict[str, Any]] = []
         reply_parts: list[str] = []
+        rag_meta = None
 
-        if confirm_action:
+        help_signals = ("how do", "what is", "what are", "explain mode", "faq", "help", "demo loop", "judge", "rag")
+        if any(s in msg for s in help_signals) and not any(
+            s in msg for s in ("breakdown", "optimize", "recovery", "apply plan", "urgent")
+        ):
+            help_resp = self.answer_help(message)
+            return {
+                **help_resp,
+                "tools_available": [t["name"] for t in self.TOOL_DEFINITIONS],
+                "pending_confirmation": None,
+            }
+
+        if confirm_action and allow_mutations:
             action = (pending_action or "").strip().lower()
             if action == "apply_plan" or ("apply" in msg and "plan" in msg):
                 plans = self.store.get_state().get("candidate_plans", [])
@@ -54,7 +100,6 @@ class FleetCopilot:
                     tool_calls.append({"tool": "apply_recovery_plan", "result": applied})
                     reply_parts.append(f"Confirmed: applied plan {pid}.")
                     return self._response(message, reply_parts, tool_calls)
-            # breakdown or generic confirm after a disruption prompt
             result = self.disruption.simulate_breakdown(self._extract_vehicle_id(msg))
             recovery = self.disruption.generate_recovery_plans("breakdown")
             tool_calls.extend([
@@ -69,6 +114,8 @@ class FleetCopilot:
             return self._response(message, reply_parts, tool_calls)
 
         if any(k in msg for k in ("optimize", "plan", "route")) and not ("explain" in msg or "why" in msg):
+            if not allow_mutations:
+                return self.answer_help(message)
             result = self._tool_optimize_fleet(msg)
             tool_calls.append({"tool": "optimize_fleet", "result": result})
             best = result["plans"][0] if result.get("plans") else None
@@ -80,35 +127,29 @@ class FleetCopilot:
                 )
 
         elif "breakdown" in msg or "break down" in msg:
-            vid = self._extract_vehicle_id(msg) or "V3"
-            if confirm_action:
-                result = self.disruption.simulate_breakdown(vid)
-                recovery = self.disruption.generate_recovery_plans("breakdown")
-                tool_calls.extend([
-                    {"tool": "simulate_breakdown", "result": result},
-                    {"tool": "generate_recovery", "result": recovery},
-                ])
-                reply_parts.append(
-                    f"Simulated breakdown on {vid}. {len(result.get('affected_orders', []))} orders affected. "
-                    f"Recovery recommendation: plan {recovery.get('recommended_plan_id')}."
-                )
-            else:
-                reply_parts.append(
-                    f"I can simulate a breakdown on {vid}. Confirm to proceed and auto-generate recovery plans."
-                )
-                return self._response(message, reply_parts, tool_calls, pending_confirmation="breakdown")
+            if not allow_mutations:
+                return self.answer_help(message)
+            vid = self._extract_vehicle_id(msg) or "auto"
+            reply_parts.append(
+                f"I can simulate a breakdown ({vid}). Confirm to proceed and auto-generate recovery plans."
+            )
+            return self._response(message, reply_parts, tool_calls, pending_confirmation="breakdown")
 
         elif "urgent" in msg or "emergency order" in msg:
             reply_parts.append(
-                "Urgent order insertion requires coordinates. Use Event Center or POST /api/fleet/events with type urgent_order."
+                "Urgent order insertion: use Event Center or POST /api/fleet/events with type urgent_order."
             )
 
         elif "at risk" in msg or "at-risk" in msg:
             at_risk = self.store.get_at_risk_deliveries()
             tool_calls.append({"tool": "get_at_risk_deliveries", "result": at_risk})
-            reply_parts.append(f"{len(at_risk)} deliveries at risk: {', '.join(o['id'] for o in at_risk) or 'none'}.")
+            reply_parts.append(
+                f"{len(at_risk)} deliveries at risk: {', '.join(o['id'] for o in at_risk) or 'none'}."
+            )
 
         elif "recovery" in msg or "recover" in msg:
+            if not allow_mutations:
+                return self.answer_help(message)
             result = self.disruption.generate_recovery_plans("copilot_request")
             tool_calls.append({"tool": "generate_recovery", "result": result})
             reply_parts.append(result.get("explanation", "Recovery plans generated."))
@@ -117,13 +158,12 @@ class FleetCopilot:
             plans = self.store.get_state().get("candidate_plans", [])
             if not plans:
                 reply_parts.append("No candidate plans available. Run optimize or recovery first.")
-            elif confirm_action:
-                pid = plans[0]["id"]
-                applied = self.disruption.apply_recovery_plan(pid, auto=False)
-                tool_calls.append({"tool": "apply_recovery_plan", "result": applied})
-                reply_parts.append(f"Applied plan {pid}.")
+            elif not allow_mutations:
+                reply_parts.append("Plan apply requires Control Tower session actions.")
             else:
-                reply_parts.append(f"Confirm to apply recommended plan {plans[0]['id']} ({plans[0].get('label')}).")
+                reply_parts.append(
+                    f"Confirm to apply recommended plan {plans[0]['id']} ({plans[0].get('label')})."
+                )
                 return self._response(message, reply_parts, tool_calls, pending_confirmation="apply_plan")
 
         elif "impact" in msg or "summary" in msg or "report" in msg:
@@ -139,11 +179,19 @@ class FleetCopilot:
         elif "why" in msg or "explain" in msg:
             explanation = self._tool_explain_active_plan()
             tool_calls.append({"tool": "explain_active_plan", "result": explanation})
+            ctx = self.rag.build_context(message, self.store, top_k=2)
+            rag_meta = {"sources": [d["source"] for d in ctx["retrieved"]]}
             reply_parts.append(explanation.get("text", "No active plan to explain."))
+            if ctx["retrieved"]:
+                reply_parts.append("Grounded note: " + ctx["retrieved"][0]["text"][:220] + "…")
 
-        elif "greener" in msg or "green" in msg:
+        elif "greener" in msg or "green alternative" in msg:
+            if not allow_mutations:
+                return self.answer_help(message)
             state = self.store.get_state()
-            plan = self.optimizer.optimize_fleet(state["depot"], state["vehicles"], state["orders"], mode="green")
+            plan = self.optimizer.optimize_fleet(
+                state["depot"], state["vehicles"], state["orders"], mode="green"
+            )
             tool_calls.append({"tool": "optimize_fleet", "result": {"plans": [plan]}})
             reply_parts.append(
                 f"Green alternative: {plan.get('total_co2_kg', 0)} kg CO₂e (est.), "
@@ -151,12 +199,50 @@ class FleetCopilot:
             )
 
         else:
-            reply_parts.append(self._llm_fallback(message))
+            help_resp = self.answer_help(message)
+            return {
+                **help_resp,
+                "tools_available": [t["name"] for t in self.TOOL_DEFINITIONS],
+                "pending_confirmation": None,
+            }
 
         if not reply_parts:
-            reply_parts.append(self._llm_fallback(message))
+            help_resp = self.answer_help(message)
+            return {
+                **help_resp,
+                "tools_available": [t["name"] for t in self.TOOL_DEFINITIONS],
+                "pending_confirmation": None,
+            }
 
-        return self._response(message, reply_parts, tool_calls)
+        resp = self._response(message, reply_parts, tool_calls)
+        if rag_meta:
+            resp["rag"] = rag_meta
+        return resp
+
+    def _grounded_answer(self, message: str, ctx: dict[str, Any]) -> str:
+        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            try:
+                return self._call_gemini_rag(message, ctx["context_text"], api_key)
+            except Exception:
+                pass
+        if not ctx["retrieved"] and not ctx.get("live_snapshot"):
+            return (
+                "I don't have a matching knowledge chunk yet. Try asking about the demo loop, "
+                "planning modes, breakdown recovery, or carbon estimates."
+            )
+        bits = []
+        if ctx.get("live_snapshot"):
+            live_lines = [ln for ln in ctx["live_snapshot"].splitlines() if ln.startswith("-")][:4]
+            if live_lines:
+                bits.append("Live state:\n" + "\n".join(live_lines))
+        for doc in ctx["retrieved"][:2]:
+            body = doc["text"]
+            lines = body.splitlines()
+            content = "\n".join(lines[1:] if lines and lines[0].startswith("#") else lines)
+            bits.append(content.strip()[:420])
+        sources = ", ".join(sorted({d["source"] for d in ctx["retrieved"]})) or "live state"
+        return ("\n\n".join(bits) + f"\n\n— Retrieved from: {sources}").strip()
 
     def _tool_optimize_fleet(self, msg: str) -> dict[str, Any]:
         state = self.store.get_state()
@@ -195,33 +281,21 @@ class FleetCopilot:
                 return token
         return None
 
-    def _llm_fallback(self, message: str) -> str:
-        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            return (
-                "Fleet Copilot (offline mode): I can help with optimize, breakdown simulation, recovery, "
-                "at-risk deliveries, impact summary, and plan explanations. "
-                "Try: 'Generate fleet plans', 'Simulate breakdown on V3', or 'Why was this plan selected?'"
-            )
-        try:
-            return self._call_gemini(message, api_key)
-        except Exception:
-            return (
-                "LLM service unavailable. Use structured commands: optimize, breakdown, recovery, impact, explain."
-            )
-
-    def _call_gemini(self, message: str, api_key: str) -> str:
+    def _call_gemini_rag(self, message: str, context: str, api_key: str) -> str:
         import urllib.request
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-        state = self.store.get_dashboard()
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-2.0-flash:generateContent?key={api_key}"
+        )
         prompt = (
-            "You are Sky.EcoAI Fleet Copilot. Answer briefly about fleet operations and sustainability. "
-            f"Current KPIs: {json.dumps(state.get('kpis', {}))}. User: {message}"
+            "You are Sky.EcoAI assistant. Answer ONLY using the retrieved context. "
+            "If context is insufficient, say what the operator should try next. Be concise.\n\n"
+            f"CONTEXT:\n{context[:6000]}\n\nUSER: {message}"
         )
         body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
         req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
         return data["candidates"][0]["content"]["parts"][0]["text"]
 

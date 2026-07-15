@@ -1,0 +1,145 @@
+/* Floating Sky Assistant */
+.sky-assistant-fab {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 9999;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--horizon), #f7c98a);
+  color: #10131c;
+  font-size: 22px;
+  font-weight: 700;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.sky-assistant-fab:hover { transform: translateY(-2px) scale(1.04); }
+.sky-assistant-fab.open { background: var(--dusk); color: var(--text-main); border: 1px solid var(--glass-border); }
+
+.sky-assistant-panel {
+  position: fixed;
+  right: 22px;
+  bottom: 90px;
+  width: min(380px, calc(100vw - 28px));
+  height: min(520px, calc(100vh - 120px));
+  z-index: 9998;
+  display: none;
+  flex-direction: column;
+  background: var(--dusk);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  animation: skyAssistIn 0.22s ease;
+}
+.sky-assistant-panel.open { display: flex; }
+@keyframes skyAssistIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.sky-assistant-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--glass-border);
+  background: linear-gradient(180deg, rgba(242,166,90,0.12), transparent);
+}
+.sky-assistant-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+.sky-assistant-head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.sky-assistant-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.sky-assistant-chips button {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.sky-assistant-chips button:hover { color: var(--text-main); border-color: var(--horizon); }
+
+.sky-assistant-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sky-a-msg {
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.sky-a-msg.user {
+  align-self: flex-end;
+  background: rgba(91, 141, 239, 0.18);
+}
+.sky-a-msg.bot {
+  align-self: flex-start;
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+}
+.sky-a-msg .rag-src {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+.sky-assistant-form {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--glass-border);
+}
+.sky-assistant-form input {
+  flex: 1;
+  background: var(--void);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.sky-assistant-form button[type="submit"] {
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--horizon);
+  color: #10131c;
+  font-weight: 700;
+  padding: 0 14px;
+  cursor: pointer;
+}
+.sky-assistant-form .mic-btn {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-main);
+  border-radius: var(--radius-sm);
+  width: 40px;
+  cursor: pointer;
+}
+.sky-assistant-form .mic-btn.listening {
+  border-color: var(--danger);
+  background: rgba(239, 75, 95, 0.15);
+}
