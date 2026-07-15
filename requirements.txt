@@ -1,0 +1,10 @@
+
+# Optional dependency for experimental ADK integration; a virtual fallback is built into route_agent.py.
+# google-adk==<version>  # Not required for local execution unless explicit ADK runtime is available.
+
+# Core Web Framework
+Flask==3.0.3
+Werkzeug==3.0.3
+
+# Production WSGI Server (For Deployment Setup)
+gunicorn==22.0.0

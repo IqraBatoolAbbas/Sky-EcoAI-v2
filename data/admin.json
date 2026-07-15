@@ -1,0 +1,7 @@
+{
+  "admin@sky-ecoai.local": {
+    "email": "admin@sky-ecoai.local",
+    "password_hash": "scrypt:32768:8:1$zVsQ8drkBpkEzeIL$88825852f38a2b3e104bf365b633f1da3c84cdbc163bac963e977a8acdba02dc56b6b37597e5d9948b5d50d4bd4e2c2a3c08d0c737e9cf2f59e43fa121ee7865",
+    "name": "Sky Admin"
+  }
+}

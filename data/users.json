@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Iqra",
+    "email": "iqra@gmail.com",
+    "password_hash": "scrypt:32768:8:1$OGGYPFJskGC97eOi$4396e4fd7f320e208a0c3e9a64c89b403db3e1024338570e1fb2ea4408fd1773f849f905129bb268604e41a4a42ff86869553311bb42a82210bb3045d009b507",
+    "initials": "IQ",
+    "preferences": {
+      "vehicle": "petrol",
+      "units": "km"
+    },
+    "plan": "premium",
+    "card_mask": "1234"
+  },
+  {
+    "name": "ayesha",
+    "email": "ayesha@gmail.com",
+    "password_hash": "scrypt:32768:8:1$CK9dJloMEnGscv9z$7dc5f3a205fa14dcc3fc6cd8069057f3e51f646c7105e5e5342bc321e2246547ddb9c3acb80bbc14e4952f57ffe4ce399e292112ec141130395ccca31886b734",
+    "initials": "AY",
+    "preferences": {
+      "vehicle": "petrol",
+      "units": "km"
+    },
+    "plan": "premium",
+    "card_mask": "4321"
+  }
+]

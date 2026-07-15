@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Analytics dashboard — Sky.EcoAI{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <span class="tag">Historical Analytics Logs</span>
+  <h1>Sustainability Performance Dashboard</h1>
+  <p>Local audit history, parsed on your device — nothing here leaves the browser until you export it.</p>
+</div>
+
+<div class="carbon-goal-card" style="padding: 15px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 8px; margin-bottom: 24px;">
+  <h2 style="margin: 0; font-family: var(--font-body); color: var(--text-main); font-size: 1.1rem;">🌱 Monthly Green Mitigation Target (5,000 g)</h2>
+  <div class="progress-container" style="background: rgba(0,0,0,0.2); height: 10px; border-radius: 5px; overflow: hidden; margin-top: 10px;">
+    <div id="carbonGoalFill" style="background: var(--horizon); width: 0%; height: 100%; transition: width 0.5s ease-in-out;"></div>
+  </div>
+  <p id="carbonGoalText" style="font-size: 12px; margin-top: 5px; margin-bottom: 0; color: var(--text-muted);">0% completed</p>
+</div>
+
+<div class="dashboard-toolbar">
+  <div class="filter-pills" id="enginePills">
+    <button class="filter-pill active" data-engine="all">All powertrains</button>
+    <button class="filter-pill" data-engine="petrol">Petrol</button>
+    <button class="filter-pill" data-engine="hybrid">Hybrid</button>
+    <button class="filter-pill" data-engine="electric">Electric</button>
+    <button class="filter-pill" data-engine="favorites">★ Favorites</button>
+  </div>
+  {% set user = session.get('user', {}) %}
+{% set is_premium_user = session.get('is_premium') or user.get('plan') in ['premium', 'pro'] %}
+
+<div class="toolbar-actions">
+    {% if is_premium_user %}
+      <button class="icon-btn" id="exportCsvBtn">⭳ Export CSV</button>
+    {% else %}
+      <button class="icon-btn" id="exportCsvBtn" style="opacity: 0.5; cursor: not-allowed;" disabled>
+        🔒 Export CSV (Premium)
+      </button>
+    {% endif %}
+    <button class="icon-btn" id="refreshBtn">⟳ Refresh</button>
+</div>
+
+
+<div class="dashboard-metrics-grid">
+  <div class="glass-card analytic-kpi">
+    <h3>Cumulative CO2 Saved</h3>
+    <span class="kpi-value" id="totalSavedCo2" style="font-size: 2rem; font-weight: 700; display: block;">0 g</span>
+    <div class="kpi-delta up" id="savedDelta"></div>
+  </div>
+  <div class="glass-card analytic-kpi">
+    <h3>Total Queries Evaluated</h3>
+    <span class="kpi-value" id="totalQueries" style="font-size: 2rem; font-weight: 700; display: block;">0</span>
+    <div class="kpi-delta" id="queriesDelta" style="color:var(--text-faint);">across all powertrains</div>
+  </div>
+  <div class="glass-card analytic-kpi">
+    <h3>Avg. Saving / Trip</h3>
+    <span class="kpi-value" id="avgSaved" style="font-size: 2rem; font-weight: 700; display: block;">0 g</span>
+    <div class="kpi-delta" style="color:var(--text-faint);">eco-route vs. sprint-route</div>
+  </div>
+  <div class="glass-card analytic-kpi">
+    <h3>Most-Used Powertrain</h3>
+    <span class="kpi-value" id="topEngine" style="font-size: 2rem; font-weight: 700; display: block;">—</span>
+    <div class="kpi-delta" style="color:var(--text-faint);">by query volume</div>
+  </div>
+</div>
+
+<div class="glass-card chart-card">
+  <div class="chart-card-head">
+    <h3 style="margin:0;">CO2 saved per query</h3>
+    <span style="font-size:12.5px; color:var(--text-faint);" class="mono">last 12 entries</span>
+  </div>
+  <div class="chart-canvas-wrap">
+    <canvas id="savingsChart"></canvas>
+  </div>
+</div>
+
+<div class="glass-card log-table-container">
+  <div class="log-table-head-row">
+    <h3 style="margin:0;">Local Cryptographic Ledger Registry</h3>
+  </div>
+  <table class="ledger-table">
+    <thead>
+      <tr>
+        <th>Transit Query Node</th>
+        <th>Powertrain Configuration</th>
+        <th>Sprint Impact</th>
+        <th>Green Mitigation</th>
+        <th>Net Environmental Savings</th>
+      </tr>
+    </thead>
+    <tbody id="ledgerBody"></tbody>
+  </table>
+  <div class="table-actions">
+    <button id="clearLedgerBtn" class="danger-btn">Wipe local ledger logs</button>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    function calculateDashboardTargetGoal() {
+      try {
+        const ledger = JSON.parse(localStorage.getItem("sky_eco_ledger") || "[]");
+        let totalSaved = 0;
+        
+        ledger.forEach(trip => {
+          if (trip.savings && trip.savings.co2) {
+            totalSaved += parseFloat(trip.savings.co2);
+          }
+        });
+
+        const targetMetric = 5000;
+        let percentage = Math.min(Math.round((totalSaved / targetMetric) * 100), 100);
+        if (isNaN(percentage) || percentage < 0) percentage = 0;
+
+        const goalFill = document.getElementById("carbonGoalFill");
+        const goalText = document.getElementById("carbonGoalText");
+
+        if (goalFill && goalText) {
+          goalFill.style.width = percentage + "%";
+          goalText.textContent = `${percentage}% completed (${totalSaved.toLocaleString()}g / ${targetMetric.toLocaleString()}g)`;
+        }
+      } catch (e) {
+        console.error("Target computation exception trace:", e);
+      }
+    }
+
+    calculateDashboardTargetGoal();
+    if(document.getElementById("refreshBtn")) {
+      document.getElementById("refreshBtn").addEventListener("click", () => {
+        setTimeout(calculateDashboardTargetGoal, 100);
+      });
+    }
+  });
+</script>
+{% endblock %}

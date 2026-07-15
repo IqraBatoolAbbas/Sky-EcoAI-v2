@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .eco-card { background: rgba(255, 255, 255, 0.03); border: 1px solid #4a5568; padding: 20px; border-radius: 16px; transition: 0.3s; text-align: center; }
+    .eco-card:hover { border-color: #7aa6ff; transform: translateY(-5px); background: rgba(122, 166, 255, 0.05); }
+    .badge-card { background: #1a202c; border: 1px solid #4a5568; padding: 15px; border-radius: 12px; text-align: center; width: 100px; }
+</style>
+
+<div class="agent-module-wrapper" style="max-width: 900px; margin: 40px auto; padding: 20px;">
+    <h1 style="color: #ffffff;">Carbon Forecasting Agent 🤖</h1>
+    <p style="color: #94a3b8;">Autonomous analysis of your fleet's environmental impact.</p>
+
+    <div id="agentUI" class="glass-card" style="padding: 25px; margin-top: 20px; border-left: 4px solid #7aa6ff; background: rgba(0,0,0,0.2);">
+        <div id="agentStatus" style="font-weight: bold; color: #7aa6ff; margin-bottom: 15px;">Initializing Agent...</div>
+        
+        <div id="predictionBoard" style="display: none;">
+            <p id="agentInsightText" style="margin-bottom: 25px; font-size: 1.1rem; color: #e2e8f0;"></p>
+            
+            <div id="recommendationGallery" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;">
+                </div>
+        </div>
+    </div>
+
+    <div style="margin-top: 50px;">
+    <h3 style="color: #fff; margin-bottom: 20px;">Agentic Reasoning Context</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+        
+        <div style="background: rgba(122, 166, 255, 0.1); padding: 20px; border-radius: 12px; border: 1px solid #7aa6ff;">
+            <p style="color: #7aa6ff; font-size: 11px; text-transform: uppercase; font-weight: bold;">Current Optimization Strategy</p>
+            <h4 style="color: #fff; margin-top: 5px;">"Prioritizing Green Routing"</h4>
+            <p style="color: #a0aec0; font-size: 13px; margin-top: 10px;">The agent is currently selecting routes with the lowest carbon footprint based on your fleet's historical performance.</p>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.03); padding: 20px; border-radius: 12px; border: 1px solid #4a5568;">
+            <p style="color: #48bb78; font-size: 11px; text-transform: uppercase; font-weight: bold;">Predictive Impact</p>
+            <h4 style="color: #fff; margin-top: 5px;">+12% Efficiency</h4>
+            <p style="color: #a0aec0; font-size: 13px; margin-top: 10px;">By applying the suggested "Electric Upgrade," your fleet is projected to reach carbon neutrality 3 weeks earlier.</p>
+        </div>
+
+    </div>
+ </div>
+</div>
+<script>
+async function runAgent() {
+    const status = document.getElementById('agentStatus');
+    const board = document.getElementById('predictionBoard');
+    const gallery = document.getElementById('recommendationGallery');
+    
+    try {
+        const response = await fetch('/api/agent/predict');
+        const data = await response.json();
+
+        if (data.status === "waiting") {
+            status.innerText = "System ready: No historical trip data found to analyze.";
+        } else {
+            status.innerText = "Agentic Insight Generated.";
+            document.getElementById('agentInsightText').innerText = 
+                `Your fleet has saved ${data.total_saved}g of CO2. ${data.recommendation}`;
+            
+            board.style.display = 'block';
+
+            if (data.recommendations) {
+                gallery.innerHTML = data.recommendations.map(rec => `
+                    <div class="eco-card">
+                        <img src="${rec.img}" style="width: 80px; height: 80px; border-radius: 50%; margin-bottom: 15px; border: 2px solid #7aa6ff;">
+                        <h4 style="color: #fff; margin-bottom: 5px;">${rec.title}</h4>
+                        <p style="font-size: 12px; color: #a0aec0; margin-bottom: 10px;">${rec.desc}</p>
+                        <p style="color: #7aa6ff; font-weight: bold; margin-bottom: 15px;">Potential: ${rec.saved}</p>
+                        <button onclick="alert('Applied: ${rec.title}')" style="background: #7aa6ff; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; color: white; width: 100%; font-weight: bold;">
+                            Apply
+                        </button>
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (err) {
+        console.error("Agent Error:", err);
+        status.innerText = "Error: Unable to connect to the analysis engine.";
+    }
+}
+runAgent();
+</script>
+{% endblock %}

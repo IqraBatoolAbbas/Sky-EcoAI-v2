@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Route terminal — Sky.EcoAI{% endblock %}
+{% block content %}
+
+<div class="workspace-grid"
+     data-default-vehicle="{% if current_user and current_user.preferences %}{{ current_user.preferences.vehicle }}{% else %}petrol{% endif %}"
+     data-default-units="{% if current_user and current_user.preferences %}{{ current_user.preferences.units }}{% else %}km{% endif %}"
+     id="workspaceRoot">
+
+  <div>
+    <form id="routeForm" class="glass-card">
+      <h2 style="margin-top:0; font-size: 1.5rem;">Routing Control Core</h2>
+
+      <div class="input-group">
+        <label for="sourceInput">Departure city (source node)</label>
+        <input id="sourceInput" name="source" placeholder="e.g., Karachi" required autocomplete="off">
+      </div>
+
+      <div style="display:flex; justify-content:center; margin:-6px 0 2px;">
+        <button type="button" id="swapBtn" class="icon-btn" title="Swap source and destination" style="padding:6px 12px;">⇅ Swap</button>
+      </div>
+
+      <div class="input-group">
+        <label for="destInput">Destination city (terminal node)</label>
+        <input id="destInput" name="destination" placeholder="e.g., Lahore" required autocomplete="off">
+      </div>
+
+      <div class="input-group">
+        <label>Powertrain system architecture</label>
+        <div class="select-fleet-grid" id="fleetGrid">
+          <label class="fleet-option" data-value="petrol">
+            <input type="radio" name="vehicle" value="petrol">
+            <span class="icon">⛽</span>Petrol
+          </label>
+          <label class="fleet-option" data-value="hybrid">
+            <input type="radio" name="vehicle" value="hybrid">
+            <span class="icon">🔋</span>Hybrid
+          </label>
+          <label class="fleet-option" data-value="electric">
+            <input type="radio" name="vehicle" value="electric">
+            <span class="icon">⚡</span>Electric
+          </label>
+        </div>
+      </div>
+
+      <button type="submit" class="primary-btn" style="width:100%; margin-top:6px;" id="routeSubmit">Compute dynamic solution matrix ⚡</button>
+      <div class="status-line" id="statusLine" style="margin-top:14px;"><span class="dot"></span><span id="statusText">Idle — waiting for a routing request.</span></div>
+    </form>
+
+  <div class="carbon-goal-card" style="padding: 15px; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 8px; margin-top: 20px; margin-bottom: 20px;">
+      <h3 style="margin: 0; font-family: var(--font-body); color: var(--text-main); font-size: 1.1rem;">🌱 Monthly Green Mitigation Target (5,000 g)</h3>
+      <div class="progress-container" style="background: rgba(0,0,0,0.2); height: 10px; border-radius: 5px; overflow: hidden; margin-top: 10px;">
+        <div id="carbonGoalFill" style="background: var(--horizon); width: 0%; height: 100%; transition: width 0.5s ease-in-out;"></div>
+      </div>
+      <p id="carbonGoalText" style="font-size: 12px; margin-top: 5px; margin-bottom: 0; color: var(--text-muted);">0% completed</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="glass-card" style="padding:12px;">
+        <small style="color:var(--text-faint); display:block; text-transform:uppercase; font-size:10px;">Cumulative CO2 Saved</small>
+        <span id="totalSavedCo2" style="font-size:20px; font-weight:700; color:var(--altitude);">0 g</span>
+      </div>
+      <div class="glass-card" style="padding:12px;">
+        <small style="color:var(--text-faint); display:block; text-transform:uppercase; font-size:10px;">Queries Evaluated</small>
+        <span id="totalQueriesCount" style="font-size:20px; font-weight:700; color:var(--horizon);">0</span>
+      </div>
+    </div>
+
+    <div class="glass-card" style="margin-top:20px; position: relative;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline;">
+        <h2 style="margin:0; font-size: 1.3rem;">Recent trips</h2>
+        <a href="/dashboard" style="font-size:12.5px; color:var(--horizon); text-decoration:none; font-weight:600;">Full ledger →</a>
+      </div>
+      
+      {% if session.get('is_premium') or current_user.plan == 'premium' %}
+        <div class="trip-history-list" id="tripHistoryList">
+          <p style="color:var(--text-faint); font-size:13px; margin:10px 0 0;">No trips logged yet this session.</p>
+        </div>
+      {% else %}
+        <div class="trip-history-list" id="tripHistoryList" style="filter: blur(1.5px); opacity: 0.4; pointer-events: none; max-height: 80px; overflow: hidden; margin-top: 10px;">
+          <p style="color:var(--text-faint); font-size:13px;">Karachi to Lahore via Eco Pass...</p>
+        </div>
+        <div style="position: absolute; bottom: 12px; left: 0; width: 100%; text-align: center; z-index: 5;">
+          <a href="/premium" style="font-size: 11px; color: var(--horizon); text-decoration: underline; font-weight: 700;">Upgrade to save session logs</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="glass-card diagnostics-panel">
+    <div>
+      <span class="tag" style="background:rgba(52,211,153,0.12); color:var(--stratos); display:inline-block;">Active Diagnostics</span>
+      <h2 id="tripTitle" style="margin:10px 0;">System status: idle</h2>
+      <p id="recommendation" style="color:var(--text-muted); margin:0 0 16px 0;">Run a routing request to trigger the telemetry calculation layer and plot the live map.</p>
+    </div>
+
+    <div class="visual-map-box" id="mapWrap" style="height:280px; position:relative;">
+      <div id="routeMap" style="width:100%; height:100%; border-radius:inherit;"></div>
+      <div class="map-canvas-container" id="mapCaption" style="position:absolute; top:8px; left:8px; z-index:400; background:rgba(0,0,0,0.55); color:#fff; padding:3px 10px; border-radius:6px; margin:0;">🌐 Enter a route to plot it on the map</div>
+    </div>
+
+    <div class="route-cards-grid">
+      <div class="glass-card variant-sprint" style="padding:16px; background:rgba(0,0,0,0.15);">
+        <h3 style="margin:0; font-size:1.1rem;">🏃 Velocity path</h3>
+        <div class="route-metric-row"><span>Distance</span><span id="sprintDistance">-- km</span></div>
+        <div class="route-metric-row"><span>Duration</span><span id="sprintDuration">-- min</span></div>
+        <div class="route-metric-row"><span>CO2 load</span><span id="sprintCo2">-- g</span></div>
+      </div>
+      <div class="glass-card variant-green" style="padding:16px; background:rgba(0,0,0,0.15);">
+        <h3 style="margin:0; font-size:1.1rem;">🌱 Optimized eco</h3>
+        <div class="route-metric-row"><span>Distance</span><span id="greenDistance">-- km</span></div>
+        <div class="route-metric-row"><span>Duration</span><span id="greenDuration">-- min</span></div>
+        <div class="route-metric-row"><span>CO2 load</span><span id="greenCo2">-- g</span></div>
+      </div>
+    </div>
+
+    <div class="savings-banner" id="savingsBanner" style="display:none;">
+      <span>Carbon avoided by choosing eco-route</span>
+      <b id="savedCo2">0g</b>
+    </div>
+
+    {% if session.get('is_premium') or current_user.plan == 'premium' %}
+      <div id="resultActions" style="display:none; gap:10px; margin-top:14px;">
+        <button class="icon-btn" id="favoriteBtn">☆ Save as favorite</button>
+        <button class="icon-btn" id="copySummaryBtn">⧉ Copy summary</button>
+      </div>
+    {% else %}
+      <div id="resultActions" style="display:none; gap:10px; margin-top:14px; position: relative;">
+        <button class="icon-btn" style="opacity: 0.5; cursor: not-allowed;" disabled>🔒 Save as favorite (Pro)</button>
+        <button class="icon-btn" id="copySummaryBtn">⧉ Copy summary</button>
+        <div style="margin-top: 8px;">
+          <small style="color: var(--horizon); font-size: 11px;">💡 <a href="/premium" style="color: inherit; font-weight: 700;">Upgrade to Premium Pro</a> to unlock favorites storage matrix.</small>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}

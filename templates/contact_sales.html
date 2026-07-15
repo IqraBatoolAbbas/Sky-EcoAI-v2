@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Contact Sales — Sky.EcoAI{% endblock %}
+
+{% block content %}
+<div class="sales-page-wrapper" style="padding: 60px 20px; display: flex; justify-content: center; min-height: 80vh;">
+    <div class="card" style="width: 100%; max-width: 500px; padding: 40px; border-radius: 12px; background: #1e293b;">
+        <h2 style="margin-bottom: 10px; color: white;">Contact Sales 🚀</h2>
+        <p style="margin-bottom: 30px; color: #94a3b8;">Describe your fleet needs and our engineering team will reach out shortly.</p>
+        
+        <form id="salesForm" onsubmit="event.preventDefault();">
+            <input type="email" id="email" placeholder="Work Email" required style="width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white;">
+            
+            <textarea id="message" placeholder="What are your fleet requirements?" required style="width: 100%; padding: 12px; height: 100px; margin-bottom: 20px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white;"></textarea>
+            
+            <div style="border-top: 1px solid #334155; padding-top: 20px; margin-bottom: 20px;">
+                <h3 style="color: #7aa6ff; font-size: 18px;">AI Fleet Diagnostic Engine 🚀</h3>
+                <textarea id="fleetData" placeholder="Enter route (e.g., Lahore to Karachi, 10 trucks)..." style="width: 100%; height: 80px; background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 8px; margin: 10px 0;"></textarea>
+                
+                <button type="button" id="simBtn" onclick="runDiagnostic()" style="width: 100%; padding: 12px; background: #334155; border: none; border-radius: 6px; color: white; cursor: pointer;">
+                    Simulate Savings
+                </button>
+
+                <div id="outputSection" style="display: none; background: #0f172a; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #7aa6ff; text-align: center;">
+                    <h3 id="carbonVal" style="color: #7aa6ff; margin: 0;">--</h3>
+                    <p style="font-size: 12px; color: #94a3b8;">Carbon Reduction Potential</p>
+                </div>
+            </div>
+             
+            <button type="button" onclick="submitSales()" style="width: 100%; padding: 15px; background: linear-gradient(90deg, #7aa6ff, #4a86ff); border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;">
+                Submit Inquiry
+            </button>
+            <div id="summaryView" style="display:none; padding:20px; border:1px solid #7aa6ff; border-radius:10px;">
+    <h3>Your Submission Summary</h3>
+    <p><strong>Message:</strong> <span id="userMsg"></span></p>
+    <p><strong>AI Prediction:</strong> <span id="aiResult"></span></p>
+    <p><em>Waiting for Admin Response...</em></p>
+</div>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+// 1. Fixed Diagnostic Button Function
+async function runDiagnostic() {
+    const outputSection = document.getElementById('outputSection');
+    const carbonVal = document.getElementById('carbonVal');
+    const fleetData = document.getElementById('fleetData').value;
+
+    if (!fleetData) {
+        alert("Please enter fleet requirements first!");
+        return;
+    }
+
+    try {
+        carbonVal.innerText = "Analyzing...";
+        outputSection.style.display = 'block';
+
+        const res = await fetch('/api/analyze-fleet', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: fleetData })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+            carbonVal.innerText = data.prediction.carbon + " Reduction";
+            document.getElementById('aiResult').innerText = data.prediction.carbon;
+        }
+    } catch (err) {
+        carbonVal.innerText = "Error";
+    }
+}
+
+// 2. Fixed Submit Inquiry Function
+async function submitSales() {
+    const btn = document.querySelector('button[onclick="submitSales()"]');
+    const msg = document.getElementById('message').value;
+    
+    btn.innerText = "Sending...";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/support/ticket', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                email: document.getElementById('email').value, 
+                category: "Sales", 
+                message: msg 
+            })
+        });
+        
+        if (res.ok) {
+            alert("Inquiry Sent Successfully!");
+            document.getElementById('summaryView').style.display = 'block';
+            document.getElementById('userMsg').innerText = msg;
+            btn.innerText = "Sent!";
+        } else {
+            alert("Please login first.");
+        }
+    } catch (err) {
+        alert("Failed to connect.");
+    } finally {
+        btn.disabled = false;
+    }
+}
+});
+</script>
+{% endblock %}

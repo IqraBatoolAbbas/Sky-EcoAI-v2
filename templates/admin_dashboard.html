@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Console — Sky.EcoAI</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header class="main-header" style="border-bottom:1px solid var(--horizon);">
+    <div class="nav-container">
+      <div class="logo-zone">
+        <span>🛠️</span> Sky<span class="accent-text">.Admin</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:14px;">
+        <span style="font-size:13.5px; color:var(--text-muted);">Signed in as <strong style="color:var(--text-main);">{{ current_admin.name if current_admin else 'Admin' }}</strong></span>
+        <button class="theme-toggle-btn" id="themeToggler">☾</button>
+        <a href="/admin/logout" class="btn-ghost-nav">Log out</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="content-wrapper">
+    <div class="dashboard-header">
+      <span class="tag">Admin Console</span>
+      <h1>Operations Overview</h1>
+      <p>Everything the customer-facing side can't see: account plans and the live ticket queue.</p>
+    </div>
+
+    <div class="dashboard-metrics-grid" id="adminStatsGrid">
+      <div class="glass-card analytic-kpi"><h2>Total Users</h2><span class="kpi-value" id="statUsers">—</span></div>
+      <div class="glass-card analytic-kpi"><h2>Premium Users</h2><span class="kpi-value" id="statPremium">—</span></div>
+      <div class="glass-card analytic-kpi"><h2>Open Tickets</h2><span class="kpi-value" id="statOpen">—</span></div>
+      <div class="glass-card analytic-kpi"><h2>Total Tickets</h2><span class="kpi-value" id="statTotal">—</span></div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap:24px; align-items:flex-start;width: 100%; 
+    max-width: 100vw; 
+    overflow-x: hidden;">
+      <div class="glass-card">
+        <h2 style="margin-top:0; font-size:1.5rem; display: flex; flex-direction: column; gap: 14px; width: 100%; min-width: 0;">Ticket Queue</h2>
+        <div id="ticketQueue" style="display:flex; flex-direction:column; gap:14px; margin-top:16px;">
+          <p style="color:var(--text-faint);">Loading tickets…</p>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <h2 style="margin-top:0; font-size:1.5rem;">Users</h2>
+        <div id="userList" style="display:flex; flex-direction:column; gap:8px; margin-top:12px; max-height:520px; overflow-y:auto;">
+          <p style="color:var(--text-faint);">Loading users…</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Account settings — Sky.EcoAI{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <span class="tag">Workspace Preferences</span>
+  <h1>Account Settings</h1>
+  <p>Signed in as <strong style="color:var(--text-main);">{{ current_user.email if current_user else 'Guest' }}</strong> — manage your profile and how the routing console behaves by default.</p>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+  <div class="glass-card">
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:22px;">
+      <span class="user-avatar" style="width:48px; height:48px; font-size:16px;">
+        {{ current_user.initials if (current_user and current_user.initials) else (current_user.name[:2].upper() if current_user else 'GS') }}
+      </span>
+      <div>
+        <div style="font-weight:700; font-size:16px;">{{ current_user.name if current_user else 'Guest User' }}</div>
+        <div style="font-size:12.5px; color:var(--text-faint);">{{ current_user.email if current_user else '' }}</div>
+      </div>
+    </div>
+    <h2 style="margin-top:0; font-size: 1.5rem;">Profile</h2>
+    <div class="form-error-banner" id="profileError"></div>
+    <div class="input-group">
+      <label for="acctName">Full name</label>
+      <input type="text" id="acctName" value="{{ current_user.name if current_user else '' }}">
+    </div>
+    <div class="input-group">
+      <label for="acctEmail">Email address</label>
+      <input type="email" id="acctEmail" value="{{ current_user.email if current_user else '' }}" disabled>
+      <div class="field-hint" style="margin-top:6px;">Email changes aren't supported yet — contact support to update it.</div>
+    </div>
+    <button class="primary-btn" id="saveProfileBtn">Save changes</button>
+  </div>
+
+  <div class="glass-card">
+    <h2 style="margin-top:0; font-size: 1.5rem;">Routing preferences</h2>
+    <p style="font-size:13.5px;">These defaults are applied automatically the next time you open the route terminal.</p>
+    <div class="input-group">
+      <label for="defaultVehicle">Default powertrain</label>
+      <select id="defaultVehicle">
+        <option value="petrol" {% if current_user and current_user.preferences and current_user.preferences.vehicle == 'petrol' %}selected{% endif %}>Internal Combustion (Petrol)</option>
+        <option value="hybrid" {% if current_user and current_user.preferences and current_user.preferences.vehicle == 'hybrid' %}selected{% endif %}>Parallel Hybrid</option>
+        <option value="electric" {% if current_user and current_user.preferences and current_user.preferences.vehicle == 'electric' %}selected{% endif %}>Battery Electric</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label for="defaultUnits">Distance units</label>
+      <select id="defaultUnits">
+        <option value="km" {% if current_user and current_user.preferences and current_user.preferences.units == 'km' %}selected{% endif %}>Kilometers</option>
+        <option value="mi" {% if current_user and current_user.preferences and current_user.preferences.units == 'mi' %}selected{% endif %}>Miles</option>
+      </select>
+    </div>
+    <button class="primary-btn" id="savePrefsBtn">Save preferences</button>
+  </div>
+</div>
+
+<div class="glass-card" style="margin-top:24px; border-color: rgba(239,75,95,0.3);">
+  <h2 style="margin-top:0; color:var(--danger); font-size: 1.5rem;">Danger zone</h2>
+  <p>Clear every trip stored in this browser's local ledger. This can't be undone and doesn't affect your account.</p>
+  <button class="danger-btn" id="wipeLedgerAcctBtn">Clear ledger history</button>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("saveProfileBtn").addEventListener("click", async () => {
+      const name = document.getElementById("acctName").value.trim();
+      const errorBanner = document.getElementById("profileError");
+      if (name.length < 2) {
+        errorBanner.textContent = "Name must be at least 2 characters.";
+        errorBanner.classList.add("show");
+        return;
+      }
+      errorBanner.classList.remove("show");
+      try {
+        const res = await fetch("/api/account", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not update profile.");
+        
+        if (typeof SkyToast !== "undefined") {
+          SkyToast.show("Profile updated successfully. Refreshing context...", "success");
+        } else {
+          alert("Profile updated.");
+        }
+        
+        setTimeout(() => window.location.reload(), 800);
+      } catch (err) {
+        if (typeof SkyToast !== "undefined") SkyToast.show(err.message, "error");
+      }
+    });
+
+    document.getElementById("savePrefsBtn").addEventListener("click", async () => {
+      const preferences = {
+        vehicle: document.getElementById("defaultVehicle").value,
+        units: document.getElementById("defaultUnits").value
+      };
+      try {
+        const res = await fetch("/api/account", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ preferences })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not save preferences.");
+        
+        if (typeof SkyToast !== "undefined") {
+          SkyToast.show("Preferences saved successfully.", "success");
+        } else {
+          alert("Preferences saved.");
+        }
+      } catch (err) {
+        if (typeof SkyToast !== "undefined") SkyToast.show(err.message, "error");
+      }
+    });
+
+    document.getElementById("wipeLedgerAcctBtn").addEventListener("click", async () => {
+      if (confirm("Clear all locally stored ledger entries? This session data filter will wipe current history dashboards.")) {
+        localStorage.removeItem("sky_eco_ledger");
+        try {
+          const res = await fetch('/api/ledger', { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to clear server ledger.");
+
+          if (typeof SkyToast !== "undefined") {
+            SkyToast.show("Ledger history cleared from device and cloud.", "success");
+          } else {
+            alert("Ledger history cleared.");
+          }
+        } catch (err) {
+          console.error("Server-side ledger wipe failed:", err);
+          if (typeof SkyToast !== "undefined") SkyToast.show("Local cleared, but server sync failed.", "error");
+        }
+        setTimeout(() => window.location.reload(), 500);
+      }
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}My support tickets — Sky.EcoAI{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <span class="tag">Support Desk</span>
+  <h1>My Support Tickets</h1>
+  <p>Every ticket you've dispatched, and the admin team's response once it lands.
+   {% if current_user.plan == 'premium' or (current_user.preferences and current_user.preferences.plan == 'premium') %}
+      <strong style="color:var(--horizon);">Premium tickets are handled first.</strong>
+   {% endif %}
+  </p>
+</div>
+
+<div id="ticketsList" style="display:flex; flex-direction:column; gap:16px;">
+</div>
+
+<template id="ticketTemplate">
+  <div class="glass-card ticket-item" style="padding:20px; border-left: 4px solid var(--horizon);">
+    <h3 class="ticket-subject"></h3>
+    <p class="ticket-message"></p>
+    <div class="admin-reply-section" style="margin-top:15px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px;">
+      <small style="color:var(--horizon); font-weight:bold;">Admin Response:</small>
+      <p class="admin-reply-text" style="margin:5px 0 0 0;"></p>
+    </div>
+  </div>
+</template>
+
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/tickets.js') }}"></script>
+{% endblock %}

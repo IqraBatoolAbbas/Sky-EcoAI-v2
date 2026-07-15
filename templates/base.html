@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sky.EcoAI — plan routes, compare powertrains, and track the carbon you avoid.">
+  <title>{% block title %}Sky.EcoAI — Sustainable Fleet Intelligence{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍃</text></svg>">
+</head>
+<body data-user-id="{{ session.user.email if session.user else 'guest' }}" 
+      data-logged-in="{{ 'true' if session.user else 'false' }}"
+      data-user-plan="{{ session.user.plan if session.user else 'free' }}">
+
+  <header class="main-header">
+    <div class="nav-container">
+      <a href="/" class="logo-zone">
+        <span>🍃</span> Sky<span class="accent-text">.EcoAI</span>
+      </a>
+
+      <nav class="nav-links" id="navLinks">
+        <a href="/" class="nav-item" data-path="/">Home</a>
+        <a href="/workspace" class="nav-item project-cta-badge" data-path="/workspace">Launch App</a>
+        <a href="/dashboard" class="nav-item" data-path="/dashboard">Analytics</a>
+        <a href="/carbon-agent" class="nav-item" data-path="/carbon-agent">Forecasting Agent</a>
+        <a href="/about" class="nav-item" data-path="/about">Support</a>
+        
+        <div class="auth-slot" id="authSlot">
+          {% if current_user %}
+          <div class="user-menu">
+            <div class="user-chip" id="userChipBtn">
+              <span class="user-avatar">{{ current_user.initials if current_user.initials else current_user.name[:2].upper() }}</span>
+              <span>{{ current_user.name }}</span>
+            </div>
+            <div class="user-dropdown" id="userDropdown">
+              <a href="/account">Account settings</a>
+              <a href="/dashboard">Analytics dashboard</a>
+              <div class="divider"></div>
+              <a href="/logout" id="userLogoutBtn" class="logout-btn danger">Log out</a>
+            </div>
+          </div>
+          {% else %}
+          <a href="/login" class="btn-ghost-nav">Log in</a>
+          <a href="/signup" class="nav-item project-cta-badge">Sign up</a>
+          {% endif %}
+        </div>
+      </nav>
+
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="theme-toggle-btn" id="themeToggler" aria-label="Toggle color theme">☾</button>
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation menu">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="content-wrapper">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="main-footer">
+    <div class="footer-grid">
+      <div>
+        <div class="logo-zone" style="font-size:19px;"><span>🍃</span> Sky<span class="accent-text">.EcoAI</span></div>
+        <p class="footer-brand-note">Route intelligence that weighs every trip against the carbon it costs — built for fleets that want the fast way and the clean way to be the same decision.</p>
+      </div>
+      <div class="footer-col">
+        <h2>Product</h2>
+        <a href="/workspace">Route optimizer</a>
+        <a href="/dashboard">Analytics dashboard</a>
+        <a href="/#pricing">Pricing</a>
+      </div>
+      <div class="footer-col">
+        <h2>Company</h2>
+        <a href="/about">Support &amp; research</a>
+        <a href="/about#contact">Contact sales</a>
+        <a href="/signup">Create an account</a>
+      </div>
+      <div class="footer-col">
+        <h2>Legal</h2>
+        <a href="/about">Privacy policy</a>
+        <a href="/about">Terms of service</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p style="margin:0;">© 2026 Sky Carbon Intelligence Systems.</p>
+      <div class="footer-socials">
+        <a href="#" aria-label="X / Twitter">𝕏</a>
+        <a href="#" aria-label="LinkedIn">in</a>
+        <a href="#" aria-label="GitHub">gh</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

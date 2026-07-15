@@ -1,0 +1,122 @@
+[
+  {
+    "ticket_id": "SKY-023F55",
+    "email": "iqra@gamil.com",
+    "category": "API &amp; token verification",
+    "message": "Add voice feature",
+    "status": "answered",
+    "response": "okie we implement this in future",
+    "responded_at": 1783404951,
+    "created_at": 1783404902
+  },
+  {
+    "ticket_id": "SKY-A4C454",
+    "email": "iqra@gmail.com",
+    "category": "Custom enterprise pricing",
+    "message": "contact sales issue",
+    "status": "answered",
+    "response": "\ud83e\udd16 [AI Assistant]: Sky.EcoAI Copilot: Thank you for your dispatch! Our system has cataloged your inquiry, and an administrator will review this shortly.",
+    "responded_at": 1783530747,
+    "created_at": 1783530747
+  },
+  {
+    "ticket_id": "SKY-8E5C70",
+    "email": "iqra@gmail.com",
+    "category": "Sales Inquiry",
+    "message": "dedicated infrastructure",
+    "status": "answered",
+    "response": "okie",
+    "responded_at": 1783535820,
+    "created_at": 1783535772
+  },
+  {
+    "ticket_id": "SKY-28D189",
+    "email": "iqra@gmail.com",
+    "category": "Sales Inquiry",
+    "message": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": "answered",
+    "response": "\ud83e\udd16 [AI Assistant]: Sky.EcoAI Copilot: Thank you for your dispatch! Our system has cataloged your inquiry, and an administrator will review this shortly.",
+    "responded_at": 1783537289,
+    "created_at": 1783537289
+  },
+  {
+    "ticket_id": "SKY-D217E7",
+    "email": "iqra@gmail.com",
+    "category": "General",
+    "message": "I operate 15 heavy-duty trucks from Lahore to Karachi. We currently use 400 liters of diesel per trip per truck. We are facing high idle-time costs and want to optimize route efficiency",
+    "status": "answered",
+    "response": "\ud83e\udd16 [AI Assistant]: Sky.EcoAI Copilot: Thank you for your dispatch! Our system has cataloged your inquiry, and an administrator will review this shortly.",
+    "responded_at": 1783859471,
+    "created_at": 1783859471
+  },
+  {
+    "ticket_id": "SKY-4BFDBA",
+    "email": "iqra@gmail.com",
+    "category": "General",
+    "message": "5 trucks lahore to gujrat",
+    "status": "answered",
+    "response": "\ud83e\udd16 [AI Assistant]: Sky.EcoAI Copilot: Thank you for your dispatch! Our system has cataloged your inquiry, and an administrator will review this shortly.",
+    "responded_at": 1784037539,
+    "created_at": 1784037539
+  },
+  {
+    "ticket_id": "SKY-C77ECC",
+    "email": "ayesha@gmail.com",
+    "category": "Custom enterprise pricing",
+    "message": "adding voice features",
+    "status": "answered",
+    "response": "\ud83e\udd16 [AI Assistant]: Sky.EcoAI Copilot: Thank you for your dispatch! Our system has cataloged your inquiry, and an administrator will review this shortly.",
+    "responded_at": 1784091076,
+    "created_at": 1784091076
+  },
+  {
+    "ticket_id": "SKY-1800DE",
+    "email": "user@example.com",
+    "category": "Sales",
+    "message": "Interested in Pro Fleet Upgrade",
+    "status": "answered",
+    "response": "\ud83e\udd16 [AI Assistant]: Sky.EcoAI Copilot: Thank you for your dispatch! Our system has cataloged your inquiry, and an administrator will review this shortly.",
+    "responded_at": 1784091973,
+    "created_at": 1784091973
+  },
+  {
+    "ticket_id": "SKY-47DDFC",
+    "email": "user@example.com",
+    "category": "Sales",
+    "message": "Interested in Pro Fleet Upgrade",
+    "status": "answered",
+    "response": "\ud83e\udd16 [AI Assistant]: Sky.EcoAI Copilot: Thank you for your dispatch! Our system has cataloged your inquiry, and an administrator will review this shortly.",
+    "responded_at": 1784092062,
+    "created_at": 1784092062
+  },
+  {
+    "ticket_id": "SKY-C1D5CE",
+    "email": "ayesha@gmail.com",
+    "category": "Sales",
+    "message": "5 heavy loaders from gujrat to lahore",
+    "status": "answered",
+    "response": "\ud83e\udd16 [AI Assistant]: Sky.EcoAI Copilot: Thank you for your dispatch! Our system has cataloged your inquiry, and an administrator will review this shortly.",
+    "responded_at": 1784092449,
+    "created_at": 1784092449
+  },
+  {
+    "ticket_id": "SKY-569F64",
+    "email": "ayesha@gmail.com",
+    "category": "Custom enterprise pricing",
+    "message": "improve this feature",
+    "status": "answered",
+    "response": "ok we will work on this",
+    "responded_at": 1784093430,
+    "created_at": 1784093233
+  },
+  {
+    "ticket_id": "SKY-8E779C",
+    "email": "ayesha@gmail.com",
+    "category": "Sales",
+    "message": "5 heavy truck with 2 loaders from gujrat to lahore",
+    "status": "answered",
+    "response": "\ud83e\udd16 [AI Assistant]: Sky.EcoAI Copilot: Thank you for your dispatch! Our system has cataloged your inquiry, and an administrator will review this shortly.",
+    "responded_at": 1784095434,
+    "created_at": 1784095434
+  }
+]

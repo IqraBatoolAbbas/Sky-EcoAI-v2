@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Page not found — Sky.EcoAI{% endblock %}
+{% block content %}
+
+<div class="error-wrapper">
+  <div class="error-code">404</div>
+  <h2>This route doesn't exist</h2>
+  <p style="max-width:420px; text-align:center;">The page you're looking for was never mapped. Head back to the routing console or the homepage.</p>
+  <div class="hero-action-buttons" style="margin-top:10px;">
+    <a href="/" class="action-btn primary-glow-btn">Back to home</a>
+    <a href="/workspace" class="action-btn secondary-ghost-btn">Open route terminal</a>
+  </div>
+</div>
+
+{% endblock %}

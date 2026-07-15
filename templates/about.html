@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Support &amp; research — Sky.EcoAI{% endblock %}
+{% block content %}
+
+<span class="tag">Support Center</span>
+<h1 style="margin-top:12px;">Support Center &amp; Architecture Framework</h1>
+<p style="color:var(--text-muted); font-size:17px; max-width:640px;">Questions about Sky Carbon Networks? Find answers below or reach the engineering triage desk directly.</p>
+
+<div class="support-grid" id="contact">
+  <div class="glass-card">
+    <h2 style="margin-top:0; border-bottom:1px solid var(--glass-border); padding-bottom:14px; font-size: 1.5rem;">Frequently Asked Questions</h2>
+    <div class="faq-accordion" id="faqAccordion">
+      <div class="faq-block">
+        <div class="faq-question">What algorithm models calculate the alternative routes? <span>▾</span></div>
+        <div class="faq-answer">Sky runs a multi-layered route optimization pass and stores each result with a deterministic hash so a saved trip can be verified later without re-running the calculation.</div>
+      </div>
+      <div class="faq-block">
+        <div class="faq-question">How does theme switching persist across page changes? <span>▾</span></div>
+        <div class="faq-answer">Your theme choice is written to local storage and applied the moment a page loads, so it stays consistent no matter which page you land on.</div>
+      </div>
+      <div class="faq-block">
+        <div class="faq-question">Is ledger data logged server-side or locally? <span>▾</span></div>
+        <div class="faq-answer">Every routing entry currently stays on your device in browser storage. Nothing is transmitted until you explicitly export it.</div>
+      </div>
+      <div class="faq-block">
+        <div class="faq-question">Can I use Sky.EcoAI without an account? <span>▾</span></div>
+        <div class="faq-answer">Yes — the Basic tier and the route terminal work without signing in. Creating an account lets you save preferences and sync a profile across devices once that's enabled.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass-card" style="background: linear-gradient(145deg, rgba(242,166,90,0.05), rgba(0,0,0,0)); display: flex; flex-direction: column; gap: 15px;">
+    <div style="display: flex; gap: 10px; border-bottom: 1px solid var(--glass-border); padding-bottom: 12px; margin-bottom: 5px;">
+      <button id="tabNewTicket" class="primary-btn" style="padding: 10px 18px; font-size: 13.5px; border-radius: 9px;">✍ New Ticket</button>
+      <button id="tabHistory" class="secondary-ghost-btn" style="padding: 10px 18px; font-size: 13.5px; border-radius: 9px; cursor: pointer;">🎫 Check Status &amp; Replies</button>
+    </div>
+
+    <div id="panelFormView" style="display: block;">
+      <div>
+        <h2 style="margin-top:0; margin-bottom:5px; font-size: 1.5rem;">Submit a support ticket</h2>
+        <p style="font-size:13.5px; color:var(--text-muted); margin:0 0 15px 0;">Need help with an integration? Reach the triage desk directly.</p>
+      </div>
+      
+      <form id="supportForm">
+        <div class="input-group">
+          <label for="ticketEmail">Your work email</label>
+          <input type="email" id="ticketEmail" class="help-input" placeholder="name@company.com" required>
+        </div>
+        <div class="input-group">
+          <label for="ticketCategory">Issue category</label>
+          <select id="ticketCategory" class="help-input">
+            <option>API &amp; token verification</option>
+            <option>Powertrain telemetry inaccuracies</option>
+            <option>Custom enterprise pricing</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label for="ticketMessage">Describe the issue</label>
+          <textarea id="ticketMessage" class="help-input" rows="4" placeholder="What happened, and what did you expect instead?" required></textarea>
+        </div>
+        <button type="submit" id="ticketSubmitBtn" class="primary-btn" style="width:100%;">Dispatch ticket</button>
+      </form>
+
+      <div id="aiResponseContainer" class="glass-card" style="display: none; background: rgba(0, 180, 255, 0.05); border: 1px dashed rgba(0, 180, 255, 0.3); padding: 12px; border-radius: 6px; margin-top: 12px;">
+        <h3 id="aiResponseHeader" style="margin: 0 0 6px 0; color: #00b4ff; font-family: var(--font-body); display: flex; align-items: center; gap: 6px; font-size: 1rem;">
+          🤖 Sky Concierge AI Automated Resolution:
+        </h3>
+        <p id="aiResponseText" style="font-size: 13px; margin: 0; line-height: 1.4; color: var(--text-main); font-style: italic;"></p>
+      </div>
+    </div>
+
+    <div id="panelHistoryView" style="display: none; flex-direction: column; gap: 12px;">
+      <div>
+        <h2 style="margin-top:0; margin-bottom:5px; font-size: 1.5rem;">Your Support Logs</h2>
+        <p style="font-size:13.5px; color:var(--text-muted); margin:0 0 12px 0;">Track dynamic responses from AI automation and Admin desks.</p>
+      </div>
+      
+      <div id="inlineHistoryList" style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; padding-right: 4px;">
+        <p style="color:var(--text-faint); font-size: 13px;">Initialising data streams...</p>
+      </div>
+    </div>
+
+    <div class="contact-shortcuts" style="margin-top: auto;">
+      <div class="contact-shortcut"><span class="ic">✉️</span> support@sky-ecoai.example</div>
+      <div class="contact-shortcut"><span class="ic">⏱️</span> Median first response: under 4 hours</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // Accordion Controller
+    document.querySelectorAll("#faqAccordion .faq-block").forEach((block) => { 
+      block.addEventListener("click", () => block.classList.toggle("open")); 
+    });
+
+    // Elements Setup
+    const btnNew = document.getElementById("tabNewTicket");
+    const btnHist = document.getElementById("tabHistory");
+    const panelForm = document.getElementById("panelFormView");
+    const panelHist = document.getElementById("panelHistoryView");
+    const historyList = document.getElementById("inlineHistoryList");
+
+    // XSS Safe Text Wrapper Strategy
+    const escapeHTML = (str) => {
+      return str.replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+      );
+    };
+
+    // ⚡ TABS SWITCHING LOGIC WITH NATIVE CLASS SYSTEM MAPPING
+    btnNew.addEventListener("click", () => {
+      panelForm.style.display = "block";
+      panelHist.style.display = "none";
+      btnNew.className = "primary-btn";
+      btnHist.className = "secondary-ghost-btn"; 
+    });
+
+    btnHist.addEventListener("click", async () => {
+      panelForm.style.display = "none";
+      panelHist.style.display = "flex";
+      btnHist.className = "primary-btn";        
+      btnNew.className = "secondary-ghost-btn"; 
+      
+      await loadInlines();
+    });
+
+    async function loadInlines() {
+      try {
+        historyList.innerHTML = `<p style="color:var(--text-faint); font-size:13px;">Fetching dynamic telemetry updates...</p>`;
+        const res = await fetch("/api/my-tickets");
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Authentication required to track dispatches.");
+        if (!data.tickets || !data.tickets.length) {
+          historyList.innerHTML = `<p style="color:var(--text-faint); font-size:13px; text-align:center; padding:20px;">No tickets logged yet under this session.</p>`;
+          return;
+        }
+
+        historyList.innerHTML = data.tickets.map((t) => {
+          let status = t.status || "open";
+          let colorCode = "#ffaa00"; 
+          let bgCode = "rgba(255, 170, 0, 0.1)";
+
+          if (status === "answered") { colorCode = "#00e6b4"; bgCode = "rgba(0, 230, 180, 0.1)"; }
+          else if (status === "ai-responded") { colorCode = "#00b4ff"; bgCode = "rgba(0, 180, 255, 0.1)"; }
+
+          const cleanMessage = escapeHTML(t.message || "");
+          const cleanResponse = escapeHTML(t.response || "");
+
+          return `
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-left: 3px solid ${colorCode}; padding: 12px; border-radius: 6px; text-align: left;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
+                <span class="mono" style="color:var(--horizon); font-weight:700;">ID: ${t.ticket_id || 'N/A'}</span>
+                <span style="color:${colorCode}; background:${bgCode}; padding:2px 6px; border-radius:4px; font-weight:700; text-transform:uppercase; font-size:10px;">${status}</span>
+              </div>
+              <p style="margin:0 0 8px 0; font-size:13px; color:var(--text-main); line-height:1.4;"><strong>Message:</strong> ${cleanMessage}</p>
+              
+              ${t.response ? `
+                <div style="background:rgba(0,0,0,0.2); padding:8px 10px; border-radius:4px; border-top: 1px dashed var(--glass-border); margin-top:6px;">
+                  <span style="font-size:10px; font-weight:700; color:${cleanResponse.includes('[AI Assistant]') ? '#00b4ff' : '#00e6b4'}">
+                    ${cleanResponse.includes('[AI Assistant]') ? '🤖 AI CO-PILOT ANALYSIS:' : '📩 HUMAN ADMIN INTERVENTION:'}
+                  </span>
+                  <p style="margin:2px 0 0 0; font-size:12.5px; color:var(--text-muted); line-height:1.4;">${cleanResponse}</p>
+                </div>
+              ` : `
+                <div style="font-size:11px; color:var(--text-faint);">⏳ Waiting for specialist evaluation...</div>
+              `}
+            </div>
+          `;
+        }).join("");
+
+      } catch (err) {
+        historyList.innerHTML = `<p style="color:var(--danger); font-size:12px;">⚠ ${err.message}</p>`;
+      }
+    }
+
+    // FORM SUBMISSION EVENT HANDLER
+    document.getElementById("supportForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      
+      const submitBtn = document.getElementById("ticketSubmitBtn");
+      const emailInput = document.getElementById("ticketEmail").value.trim();
+      const categorySelect = document.getElementById("ticketCategory").value;
+      const messageTextarea = document.getElementById("ticketMessage").value.trim();
+      
+      const responseContainer = document.getElementById("aiResponseContainer");
+      const responseText = document.getElementById("aiResponseText");
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Routing to triage desk...";
+      responseContainer.style.display = "none";
+
+      try {
+        const response = await fetch("/api/support/ticket", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: emailInput,
+            category: categorySelect,
+            message: messageTextarea
+          })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Failed to process ticket framework.");
+
+        if (typeof SkyToast !== "undefined") {
+          SkyToast.show(data.message || "Ticket logged successfully.", "success");
+        } else {
+          alert("Ticket dispatched successfully.");
+        }
+
+        const rawAi = data.ai_response || (data.ticket && data.ticket.response) || "";
+        if (rawAi) {
+          responseText.textContent = rawAi.replace("🤖 [AI Assistant]: ", "");
+          responseContainer.style.display = "block";
+        }
+
+        e.target.reset();
+
+      } catch (error) {
+        if (typeof SkyToast !== "undefined") {
+          SkyToast.show(error.message, "error");
+        } else {
+          alert("Error: " + error.message);
+        }
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Dispatch ticket";
+      }
+    });
+  });
+</script>
+{% endblock %}

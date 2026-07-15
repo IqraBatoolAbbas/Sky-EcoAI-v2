@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Log in — Sky.EcoAI{% endblock %}
+{% block content %}
+
+<div class="auth-wrapper">
+  <div class="glass-card auth-card">
+    <h1>Welcome back</h1>
+    <p>Log in to reach your routing console and saved ledger history.</p>
+
+    <div class="form-error-banner" id="loginError"></div>
+
+    <form id="loginForm" novalidate>
+      <div class="input-group">
+        <label for="loginEmail">Email address</label>
+        <input type="email" id="loginEmail" name="email" placeholder="name@company.com" required>
+      </div>
+
+      <div class="input-group">
+        <label for="loginPassword">Password</label>
+        <div class="input-with-icon" style="position: relative; display: flex; align-items: center; width: 100%;">
+          <input type="password" id="loginPassword" name="password" placeholder="••••••••" required minlength="8" 
+                 style="width: 100%; padding-right: 40px;">
+          
+          <button type="button" class="input-icon-btn" data-toggle-for="loginPassword" 
+                  style="position: absolute; right: 12px; background: transparent; border: none; cursor: pointer; z-index: 50; color: var(--text-faint); font-size: 16px;">
+            👁
+          </button>
+        </div>
+      </div>
+      
+      <div class="checkbox-row">
+        <input type="checkbox" id="rememberMe">
+        <label for="rememberMe" style="margin:0;">Keep me logged in on this device</label>
+      </div>
+      
+      <button type="submit" class="primary-btn" style="width:100%;" id="loginSubmit">Log in</button>
+    </form>
+
+    <div class="auth-divider">or continue with</div>
+    <div class="social-auth-row">
+      <button class="social-btn" type="button" onclick="SkyToast.show('Google OAuth isn\'t connected yet — use email for now.', 'default')">🔵 Google</button>
+      <button class="social-btn" type="button" onclick="SkyToast.show('Microsoft OAuth isn\'t connected yet — use email for now.', 'default')">▦ Microsoft</button>
+    </div>
+
+    <p class="auth-footer-note">New to Sky.EcoAI? <a href="/signup">Create an account</a></p>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // 1. Remember Me Autofill Check
+    const rememberMeCheck = document.getElementById("rememberMe");
+    const emailInput = document.getElementById("loginEmail");
+    const savedEmail = localStorage.getItem("sky_remembered_email");
+    
+    if (savedEmail && emailInput && rememberMeCheck) {
+      emailInput.value = savedEmail;
+      rememberMeCheck.checked = true;
+    }
+
+    // 2. High-Priority Eye Toggle Interceptor
+    const toggleBtn = document.querySelector('[data-toggle-for="loginPassword"]');
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // Stops script from triggering form events
+        const passwordInput = document.getElementById("loginPassword");
+        if (passwordInput) {
+          const isPass = passwordInput.type === "password";
+          passwordInput.type = isPass ? "text" : "password";
+          toggleBtn.textContent = isPass ? "🙈" : "👁";
+        }
+      });
+    }
+
+    // 3. Form Interceptor
+    const loginForm = document.getElementById("loginForm");
+    if (loginForm) {
+      loginForm.addEventListener("submit", () => {
+        if (rememberMeCheck && rememberMeCheck.checked && emailInput) {
+          localStorage.setItem("sky_remembered_email", emailInput.value.trim());
+        } else {
+          localStorage.removeItem("sky_remembered_email");
+        }
+      });
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,56 @@
+{
+  "iqra@gmail.com": [
+    {
+      "id": 1784046844578,
+      "query": "Lahore \u2794 Gujrat",
+      "engine": "hybrid",
+      "sprintCo2": 13932,
+      "greenCo2": 11633,
+      "saved": 2299,
+      "favorite": false,
+      "timestamp": 1784046844
+    },
+    {
+      "id": 1784047541464,
+      "query": "Lahore \u2794 Gujrat",
+      "engine": "electric",
+      "sprintCo2": 6192,
+      "greenCo2": 5170,
+      "saved": 1022,
+      "favorite": false,
+      "timestamp": 1784047541
+    },
+    {
+      "id": 1784054245678,
+      "query": "Lahore \u2794 Gujrat",
+      "engine": "petrol",
+      "sprintCo2": 24768,
+      "greenCo2": 20681,
+      "saved": 4087,
+      "favorite": false,
+      "timestamp": 1784054245
+    }
+  ],
+  "ayesha@gmail.com": [
+    {
+      "id": 1784091005328,
+      "query": "Lahore \u2794 Gujrat",
+      "engine": "petrol",
+      "sprintCo2": 24768,
+      "greenCo2": 20681,
+      "saved": 4087,
+      "favorite": false,
+      "timestamp": 1784091005
+    },
+    {
+      "id": 1784093155303,
+      "query": "Lahore \u2794 Gujrat",
+      "engine": "hybrid",
+      "sprintCo2": 13932,
+      "greenCo2": 11633,
+      "saved": 2299,
+      "favorite": false,
+      "timestamp": 1784093155
+    }
+  ]
+}

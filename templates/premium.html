@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Upgrade to Premium — Sky.EcoAI{% endblock %}
+{% block content %}
+
+{% if session.get('is_premium') or session.get('is_pro') or current_user.plan == 'premium' or current_user.plan == 'pro' %}
+<div class="glass-card" style="text-align:center; padding:60px 30px;">
+  <div style="font-size:40px; margin-bottom:10px;">👑</div>
+  <span class="tag">Active Suite Plan</span>
+  <h1 style="margin-top:14px;">You're already upgraded!</h1>
+  <p style="max-width:440px; margin:0 auto 20px;">Thanks for supporting Sky — Your workspace toolsets and priority systems have been successfully initialized on this account.</p>
+  <a href="/workspace" class="primary-btn">Go to workspace terminal</a>
+</div>
+{% else %}
+
+<div class="dashboard-header" style="text-align:center;">
+  <span class="tag">Upgrade</span>
+  <h1>Unlock the full carbon workflow</h1>
+  <p style="max-width:520px; margin:0 auto;">Remove the caps on favorites, unlock professional fleet simulations, and move your diagnostics requests to the front of the queue.</p>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:24px; max-width:1050px; margin:0 auto 40px;">
+  
+  <div class="glass-card">
+    <h3 style="margin-top:0;">Free</h3>
+    <div class="price-tag">$0 <span style="font-size:14px; color:var(--text-muted);">/ always</span></div>
+    <ul class="plan-features">
+      <li>Unlimited route calculations</li>
+      <li>Local + account-saved ledger</li>
+      <li>Up to 3 favorite routes</li>
+      <li>Standard ticket response time</li>
+    </ul>
+  </div>
+
+  <div class="glass-card" style="border-color: var(--horizon);">
+    <h3 style="margin-top:0;">Premium 👑</h3>
+    <div class="price-tag">$9 <span style="font-size:14px; color:var(--text-muted);">/ monthly</span></div>
+    <ul class="plan-features">
+      <li>Everything in Free</li>
+      <li><strong>Unlimited</strong> favorite routes</li>
+      <li>Standard carbon matrix insights</li>
+      <li>Priority support queue</li>
+    </ul>
+    <a href="?tier=premium#checkoutForm" class="primary-btn" style="width:100%; text-align:center; margin-top:15px; display:block; background:transparent; border:1px solid var(--horizon); color:var(--horizon); text-decoration:none;">Choose Premium</a>
+  </div>
+
+  <div class="glass-card" style="border-color: #00b4ff; background: linear-gradient(145deg, rgba(0,180,255,0.02), rgba(0,0,0,0));">
+    <h3 style="margin-top:0; color:#00b4ff;">Pro 🚀</h3>
+    <div class="price-tag" style="color:#00b4ff;">$49 <span style="font-size:14px; color:var(--text-muted);">/ monthly</span></div>
+    <ul class="plan-features">
+      <li><strong>Everything in Premium</strong></li>
+      <li>Multi-agent fleet tracking</li>
+      <li>Batch route simulation suite</li>
+      <li>CSV &amp; spreadsheet export</li>
+    </ul>
+    <a href="?tier=pro#checkoutForm" class="primary-btn" style="width:100%; text-align:center; margin-top:15px; display:block; background:#00b4ff; border-color:#00b4ff; color:#10131c; font-weight:700; text-decoration:none;">Upgrade to Pro 🚀</a>
+  </div>
+</div>
+
+<div class="glass-card auth-card" style="margin:0 auto;" id="checkoutFormAnchor">
+  <h3 style="margin-top:0;">Complete your upgrade</h3>
+  <p style="font-size:13.5px;">This is a simulated checkout for the demo — no real payment gateway is connected yet, and no full card number is ever stored.</p>
+
+  <div class="form-error-banner" id="checkoutError"></div>
+
+  <form id="checkoutForm" novalidate>
+    <div class="input-group">
+      <label for="nameOnCard">Name on card</label>
+      <input type="text" id="nameOnCard" placeholder="{{ current_user.name if current_user else '' }}" required>
+    </div>
+    <div class="input-group">
+      <label for="cardNumber">Card number</label>
+      <input type="text" id="cardNumber" placeholder="4242 4242 4242 4242" inputmode="numeric" maxlength="19" required>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div class="input-group">
+        <label for="expiry">Expiry (MM/YY)</label>
+        <input type="text" id="expiry" placeholder="08/29" maxlength="5" required>
+      </div>
+      <div class="input-group">
+        <label for="cvv">CVV</label>
+        <input type="text" id="cvv" placeholder="123" inputmode="numeric" maxlength="4" required>
+      </div>
+    </div>
+    <button type="submit" class="primary-btn" style="width:100%;" id="checkoutSubmit">Proceed with Secure Upgrade</button>
+  </form>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/premium.js') }}"></script>
+{% endblock %}
