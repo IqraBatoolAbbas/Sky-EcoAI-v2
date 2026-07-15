@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Fleet Control Tower — Sky.EcoAI{% endblock %}
+{% block content %}
+
+<div class="tower-shell" id="towerRoot">
+  <aside class="tower-sidebar">
+    <div class="tower-brand">
+      <span class="tag">Hackathon Demo</span>
+      <h2>Fleet Control Tower</h2>
+      <p>Lahore seeded fleet · autonomous recovery loop</p>
+    </div>
+    <nav class="tower-nav" id="towerNav">
+      <button class="tower-nav-btn active" data-panel="overview">📊 Overview</button>
+      <button class="tower-nav-btn" data-panel="map">🗺️ Fleet Map</button>
+      <button class="tower-nav-btn" data-panel="optimize">⚡ Optimization</button>
+      <button class="tower-nav-btn" data-panel="events">🚨 Event Center</button>
+      <button class="tower-nav-btn" data-panel="copilot">🤖 Fleet Copilot</button>
+      <button class="tower-nav-btn" data-panel="impact">📈 Impact Report</button>
+    </nav>
+    <div class="tower-sidebar-actions">
+      <button class="primary-btn" id="resetDemoBtn" type="button">↺ Reset demo</button>
+      <span class="tower-status" id="systemStatus"><span class="dot ok"></span> System ready</span>
+    </div>
+  </aside>
+
+  <section class="tower-main">
+    <!-- OVERVIEW -->
+    <div class="tower-panel active" id="panel-overview">
+      <header class="tower-header">
+        <h1>Operations Overview</h1>
+        <p>Real-time fleet KPIs and active alerts from backend state.</p>
+      </header>
+      <div class="kpi-grid" id="overviewKpis"></div>
+      <div class="tower-split">
+        <div class="glass-card">
+          <h3>Latest alerts</h3>
+          <ul id="alertList" class="alert-list"></ul>
+        </div>
+        <div class="glass-card">
+          <h3>Active vehicles</h3>
+          <div id="vehicleTable" class="data-table-wrap"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAP -->
+    <div class="tower-panel" id="panel-map">
+      <header class="tower-header">
+        <h1>Fleet Map</h1>
+        <p>Depot, delivery points, and optimized vehicle routes.</p>
+      </header>
+      <div class="map-panel glass-card">
+        <div id="fleetMap" class="fleet-map-canvas"></div>
+        <div class="map-legend" id="mapLegend"></div>
+      </div>
+    </div>
+
+    <!-- OPTIMIZATION -->
+    <div class="tower-panel" id="panel-optimize">
+      <header class="tower-header">
+        <h1>Optimization Studio</h1>
+        <p>Compare Economy, Green, and Service planning modes.</p>
+      </header>
+      <div class="mode-selector">
+        <button class="filter-pill active" data-mode="all">All modes</button>
+        <button class="filter-pill" data-mode="economy">Economy</button>
+        <button class="filter-pill" data-mode="green">Green</button>
+        <button class="filter-pill" data-mode="service">Service</button>
+      </div>
+      <button class="primary-btn" id="optimizeBtn" type="button">Generate route plans</button>
+      <div id="planComparison" class="plan-comparison-grid"></div>
+    </div>
+
+    <!-- EVENTS -->
+    <div class="tower-panel" id="panel-events">
+      <header class="tower-header">
+        <h1>Autonomous Event Center</h1>
+        <p>Simulate disruptions and apply recovery plans.</p>
+      </header>
+      <div class="event-controls glass-card">
+        <h3>Disruption simulator</h3>
+        <div class="event-btn-row">
+          <button class="icon-btn event-btn" data-event="breakdown">🔧 Vehicle breakdown (auto-pick active)</button>
+          <button class="icon-btn event-btn" data-event="urgent_order">📦 Urgent order</button>
+          <button class="icon-btn event-btn" data-event="road_blockage">🚧 Road blockage</button>
+          <button class="icon-btn event-btn" data-event="range_warning" data-vehicle="V6">🔋 Low range (V6)</button>
+        </div>
+        <div class="event-actions">
+          <button class="primary-btn" id="generateRecoveryBtn" type="button">Generate recovery plans</button>
+          <label class="auto-recovery-toggle">
+            <input type="checkbox" id="autoRecoveryCheck"> Auto-apply best plan
+          </label>
+        </div>
+      </div>
+      <div class="tower-split">
+        <div class="glass-card">
+          <h3>Affected / at-risk orders</h3>
+          <div id="atRiskList"></div>
+        </div>
+        <div class="glass-card">
+          <h3>Agent decision timeline</h3>
+          <div id="decisionTimeline" class="timeline"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COPILOT -->
+    <div class="tower-panel" id="panel-copilot">
+      <header class="tower-header">
+        <h1>AI Fleet Copilot</h1>
+        <p>Structured tool calls with confirmation for state changes.</p>
+      </header>
+      <div class="copilot-layout glass-card">
+        <div class="copilot-suggestions">
+          <button class="filter-pill copilot-prompt" type="button">Generate fleet plans</button>
+          <button class="filter-pill copilot-prompt" type="button">Simulate breakdown on V3</button>
+          <button class="filter-pill copilot-prompt" type="button">Why was this plan selected?</button>
+          <button class="filter-pill copilot-prompt" type="button">Show greener alternative</button>
+          <button class="filter-pill copilot-prompt" type="button">Impact summary</button>
+        </div>
+        <div id="copilotMessages" class="copilot-messages"></div>
+        <form id="copilotForm" class="copilot-form">
+          <input id="copilotInput" placeholder="Ask the Fleet Copilot…" autocomplete="off">
+          <button class="primary-btn" type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- IMPACT -->
+    <div class="tower-panel" id="panel-impact">
+      <header class="tower-header">
+        <h1>Impact Report</h1>
+        <p>Measurable operational and sustainability outcomes (backend-calculated).</p>
+      </header>
+      <div class="kpi-grid" id="impactKpis"></div>
+      <div class="glass-card">
+        <h3>Disruption history</h3>
+        <div id="disruptionHistory"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/control_tower.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="{{ url_for('static', filename='js/control_tower.js') }}"></script>
+{% endblock %}

@@ -6,6 +6,10 @@ from auth_store import UserStore, ValidationError
 from ledger_store import LedgerStore
 from support_store import SupportStore
 from admin_store import AdminStore, AdminAuthError
+from fleet_store import FleetStore
+from fleet_optimizer import FleetOptimizer
+from disruption_agent import DisruptionAgent
+from fleet_copilot import FleetCopilot
 import html
 import re
 import secrets
@@ -20,6 +24,10 @@ users = UserStore()
 ledger = LedgerStore()
 support = SupportStore()
 admin_store = AdminStore()
+fleet_store = FleetStore()
+fleet_optimizer = FleetOptimizer()
+disruption_agent = DisruptionAgent(fleet_store)
+fleet_copilot = FleetCopilot(fleet_store, disruption_agent)
 
 
 # Mock Class dynamic fallback layout sync check karne ke liye (Bina code delete kiye safe testing helper)
@@ -63,6 +71,12 @@ def workspace():
     if not session.get("user"):
         return redirect(url_for("login_view")) # Logout ke baad login par bhejo!
     return render_template("app_workspace.html")
+
+@app.get("/control-tower")
+def control_tower_view():
+    if not session.get("user"):
+        return redirect(url_for("login_view", next="/control-tower"))
+    return render_template("control_tower.html")
 
 @app.get("/dashboard")
 def dashboard_view():
@@ -477,6 +491,136 @@ def api_admin_respond_ticket(ticket_id):
     except Exception as e:
         print(f"\n❌ TICKET DISPATCH RESPOND CRASH: {str(e)}\n")
         return jsonify({"error": f"Admin Response Error: {str(e)}"}), 500
+
+
+# ------------------------------------------------------------------
+# 🏗️ FLEET CONTROL TOWER — Hackathon MVP APIs
+# ------------------------------------------------------------------
+@app.get("/api/fleet/dashboard")
+def api_fleet_dashboard():
+    return jsonify(fleet_store.get_dashboard())
+
+@app.get("/api/fleet/vehicles")
+def api_fleet_vehicles():
+    return jsonify({"vehicles": fleet_store.list_vehicles()})
+
+@app.post("/api/fleet/vehicles")
+def api_fleet_create_vehicle():
+    data = request.get_json(silent=True) or {}
+    try:
+        vehicle = fleet_store.add_vehicle(data)
+        return jsonify(vehicle), 201
+    except (KeyError, ValueError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.get("/api/fleet/orders")
+def api_fleet_orders():
+    return jsonify({"orders": fleet_store.list_orders()})
+
+@app.post("/api/fleet/orders")
+def api_fleet_create_order():
+    data = request.get_json(silent=True) or {}
+    if "lat" not in data or "lng" not in data:
+        return jsonify({"error": "lat and lng are required."}), 400
+    try:
+        order = fleet_store.add_order(data)
+        return jsonify(order), 201
+    except (KeyError, ValueError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.get("/api/fleet/state")
+def api_fleet_state():
+    return jsonify(fleet_store.get_state())
+
+@app.post("/api/fleet/optimize")
+def api_fleet_optimize():
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode", "all")
+    state = fleet_store.get_state()
+    if mode == "all":
+        plans = fleet_optimizer.generate_all_modes(state["depot"], state["vehicles"], state["orders"])
+        ranked = fleet_optimizer.compare_plans(plans)
+    else:
+        ranked = [fleet_optimizer.optimize_fleet(state["depot"], state["vehicles"], state["orders"], mode=mode)]
+    fleet_store.set_candidate_plans(ranked)
+    if ranked:
+        fleet_store.log_decision(
+            trigger="optimize",
+            alternatives=[{k: p.get(k) for k in ("id", "mode", "label", "score", "total_co2_kg", "total_operating_cost_pkr")} for p in ranked],
+            selected=ranked[0],
+            explanation=f"Generated {len(ranked)} plan(s); recommended {ranked[0].get('label')}.",
+        )
+    return jsonify({"plans": ranked, "recommended_plan_id": ranked[0]["id"] if ranked else None})
+
+@app.post("/api/fleet/plans/<plan_id>/apply")
+def api_fleet_apply_plan(plan_id):
+    try:
+        plan = fleet_store.apply_plan(plan_id)
+        fleet_store.log_decision(
+            trigger="plan_applied",
+            alternatives=[],
+            selected=plan,
+            explanation=f"Operator applied {plan.get('label', plan_id)}.",
+            approval_status="approved",
+        )
+        return jsonify(plan)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+
+@app.post("/api/fleet/events")
+def api_fleet_events():
+    data = request.get_json(silent=True) or {}
+    event_type = data.get("type", "").strip().lower()
+    try:
+        if event_type == "breakdown":
+            result = disruption_agent.simulate_breakdown(data.get("vehicle_id"))
+        elif event_type == "urgent_order":
+            result = disruption_agent.insert_urgent_order(data)
+        elif event_type == "road_blockage":
+            result = disruption_agent.apply_road_penalty(
+                float(data["lat"]), float(data["lng"]), float(data.get("radius_km", 2.0))
+            )
+        elif event_type == "range_warning":
+            result = disruption_agent.simulate_range_warning(data.get("vehicle_id", "V6"))
+        else:
+            return jsonify({"error": f"Unknown event type: {event_type}"}), 400
+        return jsonify(result), 201
+    except (KeyError, ValueError, TypeError) as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.post("/api/fleet/recovery")
+def api_fleet_recovery():
+    data = request.get_json(silent=True) or {}
+    trigger = data.get("trigger", "disruption")
+    auto_apply = bool(data.get("auto_apply", False))
+    result = disruption_agent.generate_recovery_plans(trigger)
+    if auto_apply and result.get("recommended_plan_id"):
+        applied = disruption_agent.apply_recovery_plan(result["recommended_plan_id"], auto=True)
+        result["applied"] = applied
+    return jsonify(result)
+
+@app.get("/api/fleet/decisions")
+def api_fleet_decisions():
+    return jsonify({"decisions": fleet_store.get_decisions()})
+
+@app.get("/api/fleet/impact")
+def api_fleet_impact():
+    return jsonify(fleet_store.get_impact_summary())
+
+@app.post("/api/fleet/copilot")
+def api_fleet_copilot():
+    data = request.get_json(silent=True) or {}
+    message = data.get("message", "").strip()
+    if not message:
+        return jsonify({"error": "message is required."}), 400
+    confirm = bool(data.get("confirm", False))
+    pending_action = data.get("pending_action")
+    return jsonify(fleet_copilot.process_message(message, confirm_action=confirm, pending_action=pending_action))
+
+@app.post("/api/fleet/reset-demo")
+def api_fleet_reset_demo():
+    state = fleet_store.reset_demo()
+    return jsonify({"ok": True, "message": "Demo scenario reset.", "depot": state.get("depot")})
 
 
 # ------------------------------------------------------------------

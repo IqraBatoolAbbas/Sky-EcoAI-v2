@@ -1,118 +1,55 @@
 # Sky.EcoAI
 
-Sky.EcoAI is a Fleet Logistics SaaS application built as a Python Flask project. It combines an agentic AI route optimization engine, a persistent ledger for fleet telemetry and trip history, and backend telemetry processing to support carbon-aware route planning, fleet analytics, and support automation.
-[![Watch the Demo Video](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID)
-## Overview
+Sky.EcoAI is an **Autonomous Green Fleet Control Tower** for climate & sustainability hackathons. It plans low-cost, low-emission multi-vehicle delivery routes, detects disruptions (breakdowns, urgent orders, road blockage, low range), automatically generates recovery plans, and explains decisions through an AI Fleet Copilot.
 
-Sky.EcoAI is designed for logistics operators, fleet managers, and transportation planners who want to compare efficient route alternatives, capture route history, and analyze backend telemetry through an integrated SaaS-style experience.
+Legacy partner features (auth, single A→B route tool, ledger, admin) remain available alongside the Control Tower.
 
-The application is centered around three main capabilities:
+## Demo loop
 
-- **Agentic AI route optimization** using the `EcoRouteAgent` class.
-- **Persistent ledger storage** that saves route history, CO2 metrics, and favorite trips in `data/ledger.json`.
-- **Backend telemetry processing** through Flask API endpoints for route optimization, fleet analysis, ticket automation, and export.
+```
+Load Lahore fleet → Optimize (Economy/Green/Service) → Apply plan →
+Trigger breakdown → Generate recovery → Apply → Copilot explains → Impact report
+```
 
-Sky.EcoAI also includes authentication, premium subscription handling, admin management, and support ticket workflows.
+**Primary demo URL (local):** `http://127.0.0.1:5000/control-tower` (login required)
 
-## Features
+## What's new (fleet control tower)
 
-### Agentic AI Route Optimization Engine
+| Module | Responsibility |
+|--------|----------------|
+| `fleet_store.py` | Vehicles, orders, plans, events, decisions (`data/fleet_state.json`) |
+| `fleet_optimizer.py` | Google OR-Tools multi-vehicle CVRP with Economy / Green / Service modes |
+| `carbon_cost_engine.py` | Distance, operating cost (PKR), estimated CO₂e |
+| `disruption_agent.py` | Breakdown, urgent order, road blockage, range warning + recovery |
+| `fleet_copilot.py` | Structured tool calling + optional Gemini/OpenAI explanation |
 
-The heart of Sky.EcoAI is the `EcoRouteAgent` component in `route_agent.py`.
+Seeded dataset: `data/lahore_demo.json` (6 vehicles, 12 Lahore deliveries).
 
-- `EcoRouteAgent.optimize(source, destination, vehicle)` calculates route recommendations for sprint and green paths.
-- It computes an estimated distance using a deterministic hash-based distance model and maps vehicle profiles (`petrol`, `hybrid`, `electric`) to CO2 coefficients.
-- It returns:
-  - source and destination
-  - vehicle profile and recommendation text
-  - sprint and green route metrics (distance, duration, CO2)
-  - CO2 savings and percentage reduction
+### Fleet API endpoints
 
-This route optimization engine demonstrates the agentic AI concept by acting as a decision-making component that analyzes input context, selects a vehicle profile, and generates route guidance dynamically.
+- `GET /api/fleet/dashboard` — KPIs and alerts
+- `GET/POST /api/fleet/vehicles` — list / create vehicles
+- `GET/POST /api/fleet/orders` — list / create orders
+- `POST /api/fleet/optimize` — generate route plans (`mode`: `all` \| `economy` \| `green` \| `service`)
+- `POST /api/fleet/plans/<id>/apply` — apply selected plan
+- `POST /api/fleet/events` — create disruption (`breakdown`, `urgent_order`, `road_blockage`, `range_warning`)
+- `POST /api/fleet/recovery` — generate (and optionally auto-apply) recovery plans
+- `GET /api/fleet/decisions` — agent decision timeline
+- `POST /api/fleet/copilot` — natural-language control with tool calls
+- `GET /api/fleet/impact` — impact summary
+- `POST /api/fleet/reset-demo` — restore Lahore seed scenario
 
-### Agentic AI Workflow and Flow
-![Agentic Workflow](static/images/workflow.jpeg)
+## Legacy SaaS features
 
-Sky.EcoAI applies an agentic AI concept in these flows:
-
-1. **Route optimization request**
-   - Client submits a request to `/api/optimize` with source, destination, and vehicle type.
-   - The Flask backend forwards the input to `agent.optimize(...)`.
-   - The agent processes the request, simulating an ADK runtime if `google.adk` is unavailable, and produces a structured optimization response.
-   - The response includes both a fast sprint path and a green path with emissions savings.
-
-2. **Support ticket automation**
-   - When a user creates a support ticket through `/api/support/ticket`, the backend saves the ticket in `SupportStore`.
-   - The same agent is used to generate an AI assistant reply from the ticket subject and message.
-   - The reply is stored alongside the ticket, showing how agentic AI can automate customer-facing workflows.
-
-3. **Fleet analysis and telemetry diagnostics**
-   - The `/api/analyze-fleet` endpoint uses `agent.optimize(...)` as a diagnostic helper for fleet-level messages and logical telemetry analysis.
-   - The backend returns a simulated report together with carbon and fuel diagnostics.
-## 📊 Project Visuals
-
-### Real-Time Route Optimization
-The dashboard provides a side-by-side comparison of "Velocity" vs "Optimized Eco" paths, allowing fleet managers to make immediate carbon-aware decisions.
-![Route Comparison](static/images/route_comparison.png)
-
-### Sustainability Performance Dashboard
-Our integrated telemetry dashboard tracks cumulative CO2 savings and allows for automated data exports, turning audit history into actionable business intelligence.
-![Sustainability Dashboard](static/images/sustainability_dashboard.png)
-
-### Persistent Ledger
-
-`LedgerStore` in `ledger_store.py` provides persistent, account-scoped trip history:
-
-- Persisted as `data/ledger.json`.
-- Stores ledger entries per user email with fields such as `query`, `engine`, `sprintCo2`, `greenCo2`, `saved`, `favorite`, and `timestamp`.
-- Supports:
-  - retrieving ledger entries via `/api/ledger`
-  - adding entries via `/api/ledger`
-  - toggling favorites via `/api/ledger/favorite`
-  - clearing a user ledger via `DELETE /api/ledger`
-  - exporting premium CSV telemetry via `/api/export/csv`
-
-The ledger supports fleet telemetry processing by capturing route optimization metrics and making them available for later analysis.
-
-### Backend Telemetry Processing
-
-The backend includes several telemetry-focused APIs:
-
-- `/api/optimize` — Generate route optimization reports and CO2 savings.
-- `/api/agent/predict` — Summarize ledger savings and return fleet readiness recommendations.
-- `/api/analyze-fleet` — Accept fleet analysis input, run an AI diagnostic helper, and return a structured report.
-- `/api/export/csv` — Export ledger telemetry as CSV for premium users.
-- `/api/admin/overview` — Aggregate user and ticket telemetry for admin dashboards.
-
-These endpoints provide a complete telemetry processing pipeline from route generation through analysis, persistence, and reporting.
-
-### Authentication and User Management
-
-Sky.EcoAI includes:
-
-- `UserStore` in `auth_store.py` for signup, password hashing, and login.
-- Secure credential storage in `data/users.json`.
-- Validation for name, email, and password strength.
-- Session-based login for workspace access, account updates, and premium upgrades.
-- Premium membership simulation with `/api/premium/checkout`.
-
-### Support and Admin Operations
-
-- `SupportStore` persists support tickets in `data/tickets.json`.
-- Support tickets automatically receive an AI-generated assistant response.
-- `AdminStore` separates admin credentials from user data and seeds a default admin account.
-- Admin routes include `/admin`, `/api/admin/overview`, and ticket response management.
+Authentication, premium subscription simulation, admin management, support tickets, ledger analytics, and the single-route A→B workspace (`/workspace`) from the original partner build.
 
 ## Tech Stack
 
-- Python 3
-- Flask 3.0.3
-- Werkzeug 3.0.3
-- gunicorn 22.0.0 (deployment)
-- Local file-based persistence using JSON files in `data/`
-
-Optional runtime integration:
-- `google.adk` can be supported if available, but `route_agent.py` includes a fallback virtual ADK adapter that allows the app to run without the package.
+- Python 3 + Flask 3.0.3
+- Google OR-Tools (multi-vehicle routing)
+- Leaflet + OpenStreetMap (fleet map)
+- JSON state store for fleet MVP (`data/fleet_state.json`)
+- Optional: `GEMINI_API_KEY` or `OPENAI_API_KEY` for richer Copilot explanations
 
 ## Usage
 
@@ -131,81 +68,36 @@ Optional runtime integration:
 
 ### Run the App
 
-Start the Flask application:
-
 ```bash
 python app.py
 ```
 
-Visit the app in your browser at:
+Visit:
 
-```
-http://127.0.0.1:5000
+- Control Tower: `http://127.0.0.1:5000/control-tower`
+- Home: `http://127.0.0.1:5000`
+
+### Run fleet tests
+
+```bash
+pip install pytest
+pytest tests/test_fleet_flow.py -q
 ```
 
 ### Default Admin Credentials
-
-The seeded admin user is:
 
 - Email: `admin@sky-ecoai.local`
 - Password: `ChangeMe123`
 
 Update this admin password immediately in a production deployment.
 
-### Key Endpoints
-
-- `/` — Home page
-- `/login`, `/signup` — Authentication pages
-- `/dashboard` — User dashboard
-- `/workspace` — Fleet workspace
-- `/api/optimize` — Route optimization API
-- `/api/ledger` — Ledger read/write API
-- `/api/support/ticket` — Support ticket submission
-- `/api/analyze-fleet` — Fleet diagnostics endpoint
-- `/api/export/csv` — Premium CSV telemetry export
-- `/admin` — Admin dashboard
-- `/api/admin/overview` — Admin telemetry overview
-
-### Agentic AI Workflow Example
-
-1. Log in or sign up.
-2. Open the route optimization workspace.
-3. Submit source, destination, and vehicle profile.
-4. The backend calls `EcoRouteAgent.optimize(...)` to compute sprint and green route metrics.
-5. Save the result to the persistent ledger for later analysis and export.
-
-### Persistent Ledger and Telemetry Flow
-
-- After route optimization, route details can be stored with user email in `data/ledger.json`.
-- Use `/api/ledger` to fetch saved trips and `/api/ledger/favorite` to mark important routes.
-- Premium users can export saved telemetry to CSV for offline reporting.
-
-### Support Ticket Flow
-
-- Submit a ticket with category and message.
-- The backend saves the ticket and uses the same agentic AI framework to generate an automated reply.
-- Ticket state is persisted, and admins can respond through the admin interface.
-
 ### Notes
 
-- The project uses file-based persistence and is suitable for local development and prototypes.
-- For production, replace the Flask `secret_key` logic with a secure environment variable.
-- Confirm `data/` directory exists and is writable before running the app.
-- If you want to enable real ADK integration, install `google-adk` and remove the fallback only after verifying compatibility.
+- Carbon values are **estimates** based on configured conversion factors.
+- Keep API keys in environment variables — never commit `.env`.
+- Confirm `data/` is writable before running.
+- See `docs/IMPLEMENTATION_STATUS.md` for plan alignment and remaining polish items.
 
-### 🚀 Live Demo
-You can view the project in action here:
+### Live Demo
 
-👉 View Live Application
 https://sky-ecoai.vercel.app/
-
-### 🛠️ Deployment Details
-This project is optimized for performance and reliability:
-
-- Platform: Vercel (Cloud Hosting)
-
-- Backend: Flask (Python)
-
-- Frontend: HTML, CSS, JavaScript
-
-- Status: ✅ Live & Operational

@@ -1,7 +1,14 @@
-venv/
+﻿venv/
 .venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .DS_Store
+.env
+.env.*
+.pytest_cache/
+plan_extracted.txt
+data/fleet_state.json
+Sky_EcoAI_Team_Implementation_Plan.docx
+docs/IMPLEMENTATION_STATUS.md

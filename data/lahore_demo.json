@@ -1,0 +1,223 @@
+{
+  "depot": {
+    "id": "depot-lhr",
+    "name": "Lahore Central Depot",
+    "lat": 31.5204,
+    "lng": 74.3587
+  },
+  "carbon_budget_kg": 45.0,
+  "vehicles": [
+    {
+      "id": "V1",
+      "name": "Van Alpha",
+      "engine_type": "petrol",
+      "capacity_kg": 500,
+      "lat": 31.5204,
+      "lng": 74.3587,
+      "status": "active",
+      "fuel_or_range_pct": 92,
+      "cost_per_km": 18.5
+    },
+    {
+      "id": "V2",
+      "name": "Van Beta",
+      "engine_type": "hybrid",
+      "capacity_kg": 450,
+      "lat": 31.5204,
+      "lng": 74.3587,
+      "status": "active",
+      "fuel_or_range_pct": 78,
+      "cost_per_km": 14.2
+    },
+    {
+      "id": "V3",
+      "name": "EV Gamma",
+      "engine_type": "electric",
+      "capacity_kg": 400,
+      "lat": 31.5204,
+      "lng": 74.3587,
+      "status": "active",
+      "fuel_or_range_pct": 65,
+      "cost_per_km": 9.8
+    },
+    {
+      "id": "V4",
+      "name": "Truck Delta",
+      "engine_type": "petrol",
+      "capacity_kg": 800,
+      "lat": 31.5204,
+      "lng": 74.3587,
+      "status": "active",
+      "fuel_or_range_pct": 88,
+      "cost_per_km": 22.0
+    },
+    {
+      "id": "V5",
+      "name": "Van Echo",
+      "engine_type": "hybrid",
+      "capacity_kg": 480,
+      "lat": 31.5204,
+      "lng": 74.3587,
+      "status": "active",
+      "fuel_or_range_pct": 55,
+      "cost_per_km": 15.0
+    },
+    {
+      "id": "V6",
+      "name": "EV Zeta",
+      "engine_type": "electric",
+      "capacity_kg": 350,
+      "lat": 31.5204,
+      "lng": 74.3587,
+      "status": "active",
+      "fuel_or_range_pct": 40,
+      "cost_per_km": 10.5
+    }
+  ],
+  "orders": [
+    {
+      "id": "O1",
+      "customer": "Gulberg Pharmacy",
+      "lat": 31.5200,
+      "lng": 74.3436,
+      "weight_kg": 45,
+      "priority": "normal",
+      "service_minutes": 8,
+      "deadline_minutes": 120,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O2",
+      "customer": "DHA Medical Hub",
+      "lat": 31.4697,
+      "lng": 74.4126,
+      "weight_kg": 80,
+      "priority": "high",
+      "service_minutes": 12,
+      "deadline_minutes": 90,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O3",
+      "customer": "Model Town Retail",
+      "lat": 31.4833,
+      "lng": 74.3333,
+      "weight_kg": 120,
+      "priority": "normal",
+      "service_minutes": 15,
+      "deadline_minutes": 150,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O4",
+      "customer": "Johar Town Express",
+      "lat": 31.4692,
+      "lng": 74.2728,
+      "weight_kg": 60,
+      "priority": "normal",
+      "service_minutes": 10,
+      "deadline_minutes": 140,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O5",
+      "customer": "Cantt Logistics",
+      "lat": 31.5497,
+      "lng": 74.3436,
+      "weight_kg": 200,
+      "priority": "high",
+      "service_minutes": 20,
+      "deadline_minutes": 100,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O6",
+      "customer": "Faisal Town Mart",
+      "lat": 31.4180,
+      "lng": 74.3030,
+      "weight_kg": 90,
+      "priority": "normal",
+      "service_minutes": 10,
+      "deadline_minutes": 160,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O7",
+      "customer": "Wapda Town Clinic",
+      "lat": 31.4420,
+      "lng": 74.2580,
+      "weight_kg": 35,
+      "priority": "high",
+      "service_minutes": 8,
+      "deadline_minutes": 80,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O8",
+      "customer": "Bahria Orchard Store",
+      "lat": 31.3920,
+      "lng": 74.1850,
+      "weight_kg": 150,
+      "priority": "normal",
+      "service_minutes": 18,
+      "deadline_minutes": 180,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O9",
+      "customer": "Allama Iqbal Airport Cargo",
+      "lat": 31.5216,
+      "lng": 74.4036,
+      "weight_kg": 250,
+      "priority": "high",
+      "service_minutes": 25,
+      "deadline_minutes": 70,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O10",
+      "customer": "Shadman Supplies",
+      "lat": 31.5380,
+      "lng": 74.3280,
+      "weight_kg": 55,
+      "priority": "normal",
+      "service_minutes": 10,
+      "deadline_minutes": 130,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O11",
+      "customer": "Township Wholesale",
+      "lat": 31.4550,
+      "lng": 74.3180,
+      "weight_kg": 180,
+      "priority": "normal",
+      "service_minutes": 15,
+      "deadline_minutes": 170,
+      "status": "pending",
+      "assigned_vehicle": null
+    },
+    {
+      "id": "O12",
+      "customer": "Raiwind Industrial",
+      "lat": 31.2480,
+      "lng": 74.2150,
+      "weight_kg": 300,
+      "priority": "normal",
+      "service_minutes": 22,
+      "deadline_minutes": 200,
+      "status": "pending",
+      "assigned_vehicle": null
+    }
+  ]
+}

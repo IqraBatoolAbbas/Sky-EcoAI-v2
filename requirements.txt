@@ -8,3 +8,7 @@ Werkzeug==3.0.3
 
 # Production WSGI Server (For Deployment Setup)
 gunicorn==22.0.0
+
+# Fleet optimization & validation
+ortools>=9.12.4544
+pydantic>=2.8.0
