@@ -124,12 +124,34 @@ if (navToggle && navMenu) {
 }
 
 /* ---------------- ACTIVE ROUTE ANCHOR HIGHLIGHTING ---------------- */
-const path = window.location.pathname;
-document.querySelectorAll(".nav-link").forEach(link => {
-  if (link.getAttribute("href") === path) {
-    link.classList.add("active-route-node");
+const normalizePath = (value) => {
+  if (!value) return "/";
+  const stripped = value.split("?")[0].split("#")[0];
+  if (stripped.length > 1 && stripped.endsWith("/")) return stripped.slice(0, -1);
+  return stripped || "/";
+};
+
+const currentPath = normalizePath(window.location.pathname);
+const navItems = Array.from(document.querySelectorAll(".nav-item[data-path]"));
+
+let bestMatch = null;
+for (const item of navItems) {
+  const itemPath = normalizePath(item.dataset.path);
+  const isHome = itemPath === "/";
+  const isExactMatch = currentPath === itemPath;
+  const isSectionMatch = !isHome && currentPath.startsWith(`${itemPath}/`);
+
+  if (isExactMatch || isSectionMatch) {
+    if (!bestMatch || itemPath.length > bestMatch.path.length) {
+      bestMatch = { item, path: itemPath };
+    }
   }
-});
+}
+
+navItems.forEach((item) => item.classList.remove("active"));
+if (bestMatch) {
+  bestMatch.item.classList.add("active");
+}
 
   
   /* ---------------- USER DROPDOWN REDIRECTION PROTOCOLS ---------------- */
