@@ -11,8 +11,11 @@ from threading import Lock
 from typing import Any
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-STATE_PATH = os.path.join(DATA_DIR, "fleet_state.json")
 SEED_PATH = os.path.join(DATA_DIR, "lahore_demo.json")
+if os.environ.get("VERCEL"):
+    STATE_PATH = "/tmp/fleet_state.json"
+else:
+    STATE_PATH = os.path.join(DATA_DIR, "fleet_state.json")
 
 
 def _bounded_number(value: Any, field: str, minimum: float, maximum: float) -> float:
