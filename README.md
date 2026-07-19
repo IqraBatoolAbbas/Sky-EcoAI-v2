@@ -122,4 +122,4 @@ Update this admin password immediately in a production deployment.
 
 ### Live Demo
 
-https://sky-ecoai.vercel.app/
+https://sky-eco-ai-v2.vercel.app/
