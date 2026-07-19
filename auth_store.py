@@ -6,7 +6,10 @@ from threading import RLock
 from werkzeug.security import generate_password_hash, check_password_hash
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-USERS_FILE = os.path.join(DATA_DIR, "users.json")
+if os.environ.get("VERCEL"):
+    USERS_FILE = "/tmp/users.json"
+else:
+    USERS_FILE = os.path.join(DATA_DIR, "users.json")
 
 # Email validation rules structure
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
