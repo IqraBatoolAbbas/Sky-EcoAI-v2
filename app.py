@@ -294,7 +294,6 @@ def api_update_account():
 
     data = request.get_json(silent=True) or {}
     
-    # 🚨 FIX: Keyword arguments ki jagah ek Dictionary (new_data) banayein
     update_payload = {}
     if data.get("name"):
         update_payload["name"] = html.escape(data.get("name").strip())
@@ -302,13 +301,28 @@ def api_update_account():
         update_payload["preferences"] = data.get("preferences")
 
     try:
-        # Sahi call: (email, payload_dictionary)
+        # Try updating in the store
         user = users.update_user(session["user"]["email"], update_payload)
         session["user"] = user
         sync_plan_flags(user)
-        session.modified = True # Ensure session updates
+        session.modified = True
         return jsonify(user), 200
     except ValidationError as e:
+        
+        if "User not found" in str(e):
+            current_user = session["user"]
+            if "name" in update_payload:
+                current_user["name"] = update_payload["name"]
+                # Initials update karne ke liye
+                parts = [p for p in update_payload["name"].split(" ") if p]
+                current_user["initials"] = (parts[0][0] + parts[1][0]).upper() if len(parts) >= 2 else update_payload["name"][:2].upper()
+            if "preferences" in update_payload:
+                current_user["preferences"] = update_payload["preferences"]
+            
+            session["user"] = current_user
+            session.modified = True
+            return jsonify(current_user), 200
+            
         return jsonify({"error": str(e)}), 400
     except Exception:
         app.logger.exception("Account update failed")
