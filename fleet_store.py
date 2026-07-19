@@ -15,27 +15,54 @@ STATE_PATH = os.path.join(DATA_DIR, "fleet_state.json")
 SEED_PATH = os.path.join(DATA_DIR, "lahore_demo.json")
 
 
+def _bounded_number(value: Any, field: str, minimum: float, maximum: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be a number.") from exc
+    if not minimum <= number <= maximum:
+        raise ValueError(f"{field} must be between {minimum} and {maximum}.")
+    return number
+
+
+def _clean_label(value: Any, field: str, default: str) -> str:
+    label = str(value or default).strip()
+    if not 1 <= len(label) <= 100:
+        raise ValueError(f"{field} must be between 1 and 100 characters.")
+    return label
+
+
 class FleetStore:
-    def __init__(self) -> None:
+    def __init__(self, state_path: str = STATE_PATH, seed_path: str = SEED_PATH) -> None:
         self._lock = Lock()
-        os.makedirs(DATA_DIR, exist_ok=True)
-        if not os.path.exists(STATE_PATH):
+        self.state_path = state_path
+        self.seed_path = seed_path
+        os.makedirs(os.path.dirname(self.state_path) or ".", exist_ok=True)
+        if not os.path.exists(self.state_path):
             self.reset_demo()
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
     def _read(self) -> dict[str, Any]:
-        with open(STATE_PATH, "r", encoding="utf-8") as f:
+        with open(self.state_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     def _write(self, state: dict[str, Any]) -> None:
-        with open(STATE_PATH, "w", encoding="utf-8") as f:
-            json.dump(state, f, indent=2)
+        temp_path = f"{self.state_path}.{uuid.uuid4().hex}.tmp"
+        try:
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, self.state_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
     def reset_demo(self) -> dict[str, Any]:
         with self._lock:
-            with open(SEED_PATH, "r", encoding="utf-8") as f:
+            with open(self.seed_path, "r", encoding="utf-8") as f:
                 seed = json.load(f)
             state = {
                 **copy.deepcopy(seed),
@@ -122,16 +149,22 @@ class FleetStore:
     def add_vehicle(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             state = self._read()
+            vehicle_id = _clean_label(payload.get("id"), "id", f"V{len(state['vehicles']) + 1}")
+            if any(v.get("id") == vehicle_id for v in state["vehicles"]):
+                raise ValueError(f"Vehicle id {vehicle_id} already exists.")
+            engine_type = str(payload.get("engine_type", "petrol")).strip().lower()
+            if engine_type not in {"petrol", "diesel", "hybrid", "electric"}:
+                raise ValueError("engine_type must be petrol, diesel, hybrid, or electric.")
             vehicle = {
-                "id": payload.get("id") or f"V{len(state['vehicles']) + 1}",
-                "name": payload.get("name", "New Vehicle"),
-                "engine_type": payload.get("engine_type", "petrol"),
-                "capacity_kg": int(payload.get("capacity_kg", 400)),
-                "lat": float(payload.get("lat", state["depot"]["lat"])),
-                "lng": float(payload.get("lng", state["depot"]["lng"])),
+                "id": vehicle_id,
+                "name": _clean_label(payload.get("name"), "name", "New Vehicle"),
+                "engine_type": engine_type,
+                "capacity_kg": int(_bounded_number(payload.get("capacity_kg", 400), "capacity_kg", 1, 100000)),
+                "lat": _bounded_number(payload.get("lat", state["depot"]["lat"]), "lat", -90, 90),
+                "lng": _bounded_number(payload.get("lng", state["depot"]["lng"]), "lng", -180, 180),
                 "status": "active",
-                "fuel_or_range_pct": int(payload.get("fuel_or_range_pct", 100)),
-                "cost_per_km": float(payload.get("cost_per_km", 15.0)),
+                "fuel_or_range_pct": int(_bounded_number(payload.get("fuel_or_range_pct", 100), "fuel_or_range_pct", 0, 100)),
+                "cost_per_km": _bounded_number(payload.get("cost_per_km", 15.0), "cost_per_km", 0, 100000),
             }
             state["vehicles"].append(vehicle)
             state["updated_at"] = self._now()
@@ -141,16 +174,25 @@ class FleetStore:
     def add_order(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             state = self._read()
+            order_id = _clean_label(payload.get("id"), "id", f"O{len(state['orders']) + 1}")
+            if any(o.get("id") == order_id for o in state["orders"]):
+                raise ValueError(f"Order id {order_id} already exists.")
+            priority = str(payload.get("priority", "normal")).strip().lower()
+            if priority not in {"low", "normal", "high", "critical"}:
+                raise ValueError("priority must be low, normal, high, or critical.")
+            status = str(payload.get("status", "pending")).strip().lower()
+            if status not in {"pending", "assigned", "in_transit", "at_risk", "delivered"}:
+                raise ValueError("Invalid order status.")
             order = {
-                "id": payload.get("id") or f"O{len(state['orders']) + 1}",
-                "customer": payload.get("customer", "Customer"),
-                "lat": float(payload["lat"]),
-                "lng": float(payload["lng"]),
-                "weight_kg": int(payload.get("weight_kg", 50)),
-                "priority": payload.get("priority", "normal"),
-                "service_minutes": int(payload.get("service_minutes", 10)),
-                "deadline_minutes": int(payload.get("deadline_minutes", 120)),
-                "status": payload.get("status", "pending"),
+                "id": order_id,
+                "customer": _clean_label(payload.get("customer"), "customer", "Customer"),
+                "lat": _bounded_number(payload.get("lat"), "lat", -90, 90),
+                "lng": _bounded_number(payload.get("lng"), "lng", -180, 180),
+                "weight_kg": int(_bounded_number(payload.get("weight_kg", 50), "weight_kg", 1, 100000)),
+                "priority": priority,
+                "service_minutes": int(_bounded_number(payload.get("service_minutes", 10), "service_minutes", 0, 1440)),
+                "deadline_minutes": int(_bounded_number(payload.get("deadline_minutes", 120), "deadline_minutes", 1, 10080)),
+                "status": status,
                 "assigned_vehicle": payload.get("assigned_vehicle"),
             }
             state["orders"].append(order)
@@ -389,6 +431,8 @@ class FleetStore:
         return [o for o in self.list_orders() if o.get("status") == "at_risk"]
 
     def get_impact_summary(self) -> dict[str, Any]:
+        from carbon_cost_engine import calculate_emissions_kg
+
         state = self.get_state()
         decisions = state.get("decisions", [])
         events = state.get("events", [])
@@ -396,11 +440,17 @@ class FleetStore:
         baseline = state.get("baseline_snapshot") or {}
         current_co2 = active.get("total_co2_kg", 0)
         baseline_co2 = baseline.get("co2_kg", 0)
+        conventional_co2 = calculate_emissions_kg(active.get("total_distance_km", 0) or 0, "petrol")
+        conventional_avoided = round(max(0, conventional_co2 - current_co2), 3)
         return {
             "km_planned": active.get("total_distance_km", 0),
             "estimated_cost_pkr": active.get("total_operating_cost_pkr", 0),
             "estimated_co2_kg": current_co2,
-            "co2_avoided_vs_baseline_kg": round(max(0, baseline_co2 - current_co2), 3),
+            "co2_avoided_vs_baseline_kg": conventional_avoided,
+            "co2_avoided_vs_conventional_kg": conventional_avoided,
+            "conventional_all_petrol_co2_kg": conventional_co2,
+            "recovery_co2_delta_kg": round(current_co2 - baseline_co2, 3),
+            "avoidance_baseline_label": "All-petrol fleet over the same planned distance",
             "deliveries_protected": active.get("deliveries_assigned", 0),
             "disruptions_resolved": sum(
                 1
@@ -416,7 +466,7 @@ class FleetStore:
             "enforce_carbon_budget": state.get("enforce_carbon_budget", True),
             "impact_score": round(
                 (active.get("deliveries_assigned", 0) or 0) * 10
-                + max(0, baseline_co2 - current_co2) * 5
+                + conventional_avoided * 5
                 + len(decisions) * 2,
                 1,
             ),

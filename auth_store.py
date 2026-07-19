@@ -1,7 +1,8 @@
 import json
 import os
 import re
-from hashlib import sha256
+import uuid
+from threading import RLock
 from werkzeug.security import generate_password_hash, check_password_hash
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
@@ -15,33 +16,66 @@ class ValidationError(Exception):
     pass
 
 class UserStore:
-    def __init__(self):
-        os.makedirs(DATA_DIR, exist_ok=True)
-        if not os.path.exists(USERS_FILE):
-            self._write([]) # 🚨 FIXED: Init as a clean LIST format
+    def __init__(self, users_file: str = USERS_FILE):
+        self.users_file = users_file
+        self._lock = RLock()
+        os.makedirs(os.path.dirname(self.users_file) or ".", exist_ok=True)
+        if not os.path.exists(self.users_file):
+            self._write([])
         print("[Sky Auth Layer]: UserStore initialized.")
 
     def _read(self) -> list:
-        try:
-            with open(USERS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data if isinstance(data, list) else [] # 🚨 FIXED: Enforce true list
-        except (FileNotFoundError, json.JSONDecodeError):
-            return []
+        with self._lock:
+            try:
+                with open(self.users_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return data if isinstance(data, list) else []
+            except (FileNotFoundError, json.JSONDecodeError):
+                return []
 
     def _write(self, data: list) -> None:
-        with open(USERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        with self._lock:
+            temp_path = f"{self.users_file}.{uuid.uuid4().hex}.tmp"
+            try:
+                with open(temp_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temp_path, self.users_file)
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
     # UserStore ke andar ye method ho:
     def update_user(self, email, new_data): # Sirf 2 arguments!
         email = email.strip().lower()
+        if not isinstance(new_data, dict):
+            raise ValidationError("Invalid account update.")
+        allowed = {"name", "preferences"}
+        if set(new_data) - allowed:
+            raise ValidationError("One or more account fields cannot be updated.")
+        if "name" in new_data:
+            name = (new_data.get("name") or "").strip()
+            if len(name) < 2 or len(name) > 100:
+                raise ValidationError("Name must be between 2 and 100 characters.")
+            new_data = {**new_data, "name": name, "initials": self._make_initials(name)}
+        if "preferences" in new_data and not isinstance(new_data["preferences"], dict):
+            raise ValidationError("Preferences must be an object.")
         user_list = self._read()
         for u in user_list:
-            if u.get("email") == email:
+            if u.get("email", "").strip().lower() == email:
                 u.update(new_data) # Yahan new_data dictionary update ho jayegi
                 self._write(user_list)
                 return self._public(u)
         raise ValidationError("User not found")
+
+    def delete_user(self, email: str) -> None:
+        """Delete a user through the canonical store path."""
+        normalized = (email or "").strip().lower()
+        user_list = self._read()
+        updated = [u for u in user_list if u.get("email", "").strip().lower() != normalized]
+        if len(updated) == len(user_list):
+            raise ValidationError("User not found.")
+        self._write(updated)
     # --- USER METHODS COMPATIBLE WITH LIST SCHEMA ---
     def create_user(self, name: str, email: str, password: str) -> dict:
         name = (name or "").strip()

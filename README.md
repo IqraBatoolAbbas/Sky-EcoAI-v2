@@ -97,11 +97,11 @@ Visit:
 - Control Tower: `http://127.0.0.1:5000/control-tower`
 - Home: `http://127.0.0.1:5000`
 
-### Run fleet tests
+### Run all tests
 
 ```bash
 pip install pytest
-pytest tests/test_fleet_flow.py -q
+pytest -q
 ```
 
 ### Default Admin Credentials
@@ -114,9 +114,11 @@ Update this admin password immediately in a production deployment.
 ### Notes
 
 - Carbon values are **estimates** based on configured conversion factors.
+- “CO₂ avoided” uses an explicit all-petrol fleet counterfactual over the same planned distance; recovery Before → After remains a separate operational delta.
 - Keep API keys in environment variables — never commit `.env`.
 - Confirm `data/` is writable before running.
-- See `docs/IMPLEMENTATION_STATUS.md` for plan alignment and remaining polish items.
+- Set `FLASK_SECRET_KEY` and `FLASK_ENV=production` in production. Use `SKY_OPTIMIZER_SECONDS` to increase OR-Tools search time for larger fleets.
+- See `docs/DEMO_VIDEO_GUIDE.md` for the recommended demo flow and narration.
 
 ### Live Demo
 

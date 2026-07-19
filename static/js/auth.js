@@ -55,7 +55,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  const nextParam = new URLSearchParams(window.location.search).get("next") || "/workspace";
+  const requestedNext = new URLSearchParams(window.location.search).get("next");
+  const nextParam = requestedNext && requestedNext.startsWith("/") && !requestedNext.startsWith("//")
+    ? requestedNext
+    : "/workspace";
 
   /* ---------------- 3. LOGIN & REMEMBER ME TRACKER ---------------- */
   const loginForm = document.getElementById("loginForm");

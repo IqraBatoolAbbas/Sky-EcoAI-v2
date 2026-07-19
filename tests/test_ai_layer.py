@@ -47,9 +47,9 @@ def no_llm_keys(monkeypatch):
 
 
 @pytest.fixture
-def fresh_copilot():
+def fresh_copilot(tmp_path):
     """A FleetCopilot wired to a freshly reset Lahore demo state."""
-    store = FleetStore()
+    store = FleetStore(state_path=str(tmp_path / "fleet_state.json"))
     store.reset_demo()
     agent = DisruptionAgent(store)
     rag = RagStore()
@@ -100,8 +100,8 @@ def test_reload_returns_chunk_count():
     assert count > 0
 
 
-def test_live_fleet_facts_reports_kpis():
-    store = FleetStore()
+def test_live_fleet_facts_reports_kpis(tmp_path):
+    store = FleetStore(state_path=str(tmp_path / "fleet_state.json"))
     store.reset_demo()
     rag = RagStore()
     snapshot = rag.live_fleet_facts(store)
@@ -111,8 +111,8 @@ def test_live_fleet_facts_reports_kpis():
     assert "Est. CO2e:" in snapshot
 
 
-def test_build_context_combines_live_state_and_docs():
-    store = FleetStore()
+def test_build_context_combines_live_state_and_docs(tmp_path):
+    store = FleetStore(state_path=str(tmp_path / "fleet_state.json"))
     store.reset_demo()
     rag = RagStore()
     ctx = rag.build_context("carbon budget", store=store, top_k=3)
@@ -332,17 +332,23 @@ def test_process_message_unrecognized_input_falls_back_to_help(fresh_copilot):
     assert resp["pending_confirmation"] is None
 
 
-def test_process_message_urgent_keyword_does_not_call_advertised_tool(fresh_copilot):
-    """
-    KNOWN GAP: 'insert_urgent_order' is listed in FleetCopilot.TOOL_DEFINITIONS
-    as something the copilot can do, but the 'urgent' branch in
-    process_message() only replies with instructions to use the Event Center —
-    it never actually calls disruption.insert_urgent_order(). This test
-    documents that gap so a future fix (wiring the tool call) is a deliberate,
-    visible test change rather than an untracked behavior shift.
-    """
+def test_process_message_urgent_order_requires_confirmation(fresh_copilot):
     copilot, _ = fresh_copilot
     resp = copilot.process_message("I need an urgent order added")
-    assert resp["tool_calls"] == []  # no tool actually invoked
-    assert "insert_urgent_order" in resp["tools_available"]  # ...yet advertised
-    assert "Event Center" in resp["reply"]
+    assert resp["tool_calls"] == []
+    assert resp["pending_confirmation"] == "urgent_order"
+
+
+def test_process_message_confirmed_urgent_order_executes_tool(fresh_copilot):
+    copilot, _ = fresh_copilot
+    resp = copilot.process_message("yes confirm", confirm_action=True, pending_action="urgent_order")
+    assert [call["tool"] for call in resp["tool_calls"]] == ["insert_urgent_order"]
+    assert "inserted urgent order" in resp["reply"]
+
+
+def test_process_message_apply_plan_is_not_misrouted_to_optimize(fresh_copilot):
+    copilot, _ = fresh_copilot
+    copilot.process_message("optimize the fleet")
+    resp = copilot.process_message("apply plan")
+    assert resp["pending_confirmation"] == "apply_plan"
+    assert resp["tool_calls"] == []

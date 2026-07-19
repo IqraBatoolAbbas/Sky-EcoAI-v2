@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import math
+import os
 import uuid
 from typing import Any
 
 from carbon_cost_engine import (
+    compare_plans as rank_comparable_plans,
     haversine_km,
     summarize_plan,
     summarize_vehicle_route,
@@ -40,7 +42,29 @@ def _mode_cost_coeff(mode: str, vehicle: dict[str, Any]) -> float:
     return w["cost"] * vehicle.get("cost_per_km", 15) + w["emissions"] * emission_factor * 8
 
 
+def _finalize_plan(plan: dict[str, Any], mode: str) -> dict[str, Any]:
+    plan["id"] = f"PLAN-{uuid.uuid4().hex[:8]}"
+    plan["label"] = {"economy": "Economy Plan", "green": "Green Plan", "service": "Service Plan"}[mode]
+    weights = MODE_WEIGHTS[mode]
+    plan["score"] = round(
+        plan["total_operating_cost_pkr"] * weights["cost"]
+        + plan["total_co2_kg"] * 100 * weights["emissions"]
+        + plan["total_distance_km"] * weights["distance"]
+        + len(plan.get("unassigned_orders", [])) * 1000 * weights["lateness"],
+        2,
+    )
+    plan["objective_score"] = plan["score"]
+    return plan
+
+
 class FleetOptimizer:
+    def __init__(self, search_seconds: float | None = None) -> None:
+        configured = search_seconds if search_seconds is not None else os.environ.get("SKY_OPTIMIZER_SECONDS", "0.5")
+        try:
+            self.search_seconds = max(0.1, min(float(configured), 10.0))
+        except (TypeError, ValueError):
+            self.search_seconds = 0.5
+
     def optimize_fleet(
         self,
         depot: dict[str, Any],
@@ -48,13 +72,15 @@ class FleetOptimizer:
         orders: list[dict[str, Any]],
         mode: str = "economy",
     ) -> dict[str, Any]:
+        if mode not in MODE_WEIGHTS:
+            raise ValueError(f"Unknown optimization mode: {mode}")
         active_vehicles = [v for v in vehicles if v.get("status") in ("active", "range_warning")]
         pending_orders = [o for o in orders if o.get("status") in ("pending", "at_risk", "assigned")]
 
         if not active_vehicles:
-            return summarize_plan([], mode, [o["id"] for o in pending_orders])
+            return _finalize_plan(summarize_plan([], mode, [o["id"] for o in pending_orders]), mode)
         if not pending_orders:
-            return summarize_plan([], mode, [])
+            return _finalize_plan(summarize_plan([], mode, []), mode)
 
         locations = [(depot["lat"], depot["lng"])]
         order_index_map: list[str | None] = [None]
@@ -118,7 +144,11 @@ class FleetOptimizer:
         search_params.local_search_metaheuristic = (
             routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
         )
-        search_params.time_limit.seconds = 5
+        # The Lahore MVP is small; one second is enough and keeps the guided
+        # optimize + recovery loop presentation-friendly. Override for larger fleets.
+        whole_seconds = int(self.search_seconds)
+        search_params.time_limit.seconds = whole_seconds
+        search_params.time_limit.nanos = int((self.search_seconds - whole_seconds) * 1_000_000_000)
 
         solution = routing.SolveWithParameters(search_params)
 
@@ -156,21 +186,7 @@ class FleetOptimizer:
             unassigned = [oid for oid in order_index_map[1:] if oid and oid not in assigned_set]
 
         plan = summarize_plan(vehicle_routes, mode, unassigned)
-        plan["id"] = f"PLAN-{uuid.uuid4().hex[:8]}"
-        plan["label"] = {"economy": "Economy Plan", "green": "Green Plan", "service": "Service Plan"}.get(
-            mode, "Fleet Plan"
-        )
-
-        # Re-score with mode weights for comparison
-        w = MODE_WEIGHTS.get(mode, MODE_WEIGHTS["economy"])
-        plan["score"] = round(
-            plan["total_operating_cost_pkr"] * w["cost"]
-            + plan["total_co2_kg"] * 100 * w["emissions"]
-            + plan["total_distance_km"] * w["distance"]
-            + len(unassigned) * 1000 * w["lateness"],
-            2,
-        )
-        return plan
+        return _finalize_plan(plan, mode)
 
     def generate_all_modes(
         self,
@@ -184,7 +200,4 @@ class FleetOptimizer:
         return plans
 
     def compare_plans(self, plans: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        ranked = sorted(plans, key=lambda p: p.get("score", float("inf")))
-        for i, p in enumerate(ranked):
-            p["rank"] = i + 1
-        return ranked
+        return rank_comparable_plans(plans)

@@ -2,7 +2,7 @@
 {% block title %}Upgrade to Premium — Sky.EcoAI{% endblock %}
 {% block content %}
 
-{% if session.get('is_premium') or session.get('is_pro') or current_user.plan == 'premium' or current_user.plan == 'pro' %}
+{% if is_upgraded or session.get('is_premium') or session.get('is_pro') or current_user.plan == 'premium' or current_user.plan == 'pro' %}
 <div class="glass-card" style="text-align:center; padding:60px 30px;">
   <div style="font-size:40px; margin-bottom:10px;">👑</div>
   <span class="tag">Active Suite Plan</span>

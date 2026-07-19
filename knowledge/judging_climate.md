@@ -10,4 +10,4 @@ Unlike dashboards that only display fleet problems, Sky.EcoAI closes the loop: o
 - Impact narrative generation produces a Climate & Sustainability pitch from real metrics (optional Gemini).
 
 ## Real-world impact claims (measurable only)
-Track estimated CO2e avoided vs baseline, deliveries protected, disruptions resolved, and fuel/tree equivalents derived from configured factors. Always label carbon values as estimates.
+Track estimated CO2e avoided versus an all-petrol fleet over the same planned distance, deliveries protected, disruptions resolved, and fuel/tree equivalents derived from configured factors. Keep the separate recovery before/after delta visible, and always label carbon values as estimates.

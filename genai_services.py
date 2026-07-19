@@ -116,7 +116,7 @@ def generate_impact_narrative(summary: dict[str, Any], decisions: list[dict[str,
     """Judge-facing generative impact story grounded in metrics."""
     km = summary.get("km_planned", 0) or 0
     co2 = summary.get("estimated_co2_kg", 0) or 0
-    avoided = summary.get("co2_avoided_vs_baseline_kg", 0) or 0
+    avoided = round(float(summary.get("co2_avoided_vs_baseline_kg", 0) or 0), 2)
     protected = summary.get("deliveries_protected", 0) or 0
     disruptions = summary.get("disruptions_resolved", 0) or 0
     agents = summary.get("agent_actions", 0) or 0
@@ -125,7 +125,7 @@ def generate_impact_narrative(summary: dict[str, Any], decisions: list[dict[str,
 
     offline = (
         f"Sky.EcoAI protected {protected} deliveries across Lahore while keeping estimated fleet CO₂e "
-        f"at {co2} kg. Versus the baseline assignment, about {avoided} kg CO₂e was avoided "
+        f"at {co2} kg. Versus an all-petrol fleet over the same distance, about {avoided} kg CO₂e was avoided "
         f"(≈ {liters} L fuel equivalent, ≈ {trees} urban trees’ annual uptake). "
         f"The agent resolved {disruptions} disruption signal(s) with {agents} logged decisions—"
         f"demonstrating an autonomous climate-aware control tower, not a static dashboard."

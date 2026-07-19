@@ -87,7 +87,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Assigning visual telemetry state icons
       const icon = type === "success" ? "✅" : type === "error" ? "⚠" : "ℹ️";
-      toast.innerHTML = `<span>${icon}</span><span style="flex-grow:1;">${message}</span>`;
+      const iconNode = document.createElement("span");
+      iconNode.textContent = icon;
+      const messageNode = document.createElement("span");
+      messageNode.style.flexGrow = "1";
+      messageNode.textContent = String(message ?? "");
+      toast.replaceChildren(iconNode, messageNode);
       
       toastContainer.appendChild(toast);
 

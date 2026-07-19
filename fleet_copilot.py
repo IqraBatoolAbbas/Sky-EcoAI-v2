@@ -100,20 +100,34 @@ class FleetCopilot:
                     tool_calls.append({"tool": "apply_recovery_plan", "result": applied})
                     reply_parts.append(f"Confirmed: applied plan {pid}.")
                     return self._response(message, reply_parts, tool_calls)
-            result = self.disruption.simulate_breakdown(self._extract_vehicle_id(msg))
-            recovery = self.disruption.generate_recovery_plans("breakdown")
-            tool_calls.extend([
-                {"tool": "simulate_breakdown", "result": result},
-                {"tool": "generate_recovery", "result": recovery},
-            ])
-            reply_parts.append(
-                f"Confirmed: breakdown on {result.get('vehicle_id')}. "
-                f"{len(result.get('affected_orders', []))} orders affected. "
-                f"Recovery recommendation: plan {recovery.get('recommended_plan_id')}."
-            )
-            return self._response(message, reply_parts, tool_calls)
+            if action == "breakdown":
+                result = self.disruption.simulate_breakdown(self._extract_vehicle_id(msg))
+                recovery = self.disruption.generate_recovery_plans("breakdown")
+                tool_calls.extend([
+                    {"tool": "simulate_breakdown", "result": result},
+                    {"tool": "generate_recovery", "result": recovery},
+                ])
+                reply_parts.append(
+                    f"Confirmed: breakdown on {result.get('vehicle_id')}. "
+                    f"{len(result.get('affected_orders', []))} orders affected. "
+                    f"Recovery recommendation: plan {recovery.get('recommended_plan_id')}."
+                )
+                return self._response(message, reply_parts, tool_calls)
+            if action == "urgent_order":
+                depot = self.store.get_state()["depot"]
+                result = self.disruption.insert_urgent_order({
+                    "customer": "Copilot urgent delivery",
+                    "lat": depot["lat"],
+                    "lng": depot["lng"],
+                    "weight_kg": 25,
+                    "deadline_minutes": 45,
+                })
+                tool_calls.append({"tool": "insert_urgent_order", "result": result})
+                reply_parts.append(f"Confirmed: inserted urgent order {result['order']['id']}.")
+                return self._response(message, reply_parts, tool_calls)
+            return self._response(message, ["There is no matching pending action to confirm."], tool_calls)
 
-        if any(k in msg for k in ("optimize", "plan", "route")) and not ("explain" in msg or "why" in msg):
+        if any(k in msg for k in ("optimize", "plan", "route")) and not any(k in msg for k in ("explain", "why", "apply")):
             if not allow_mutations:
                 return self.answer_help(message)
             result = self._tool_optimize_fleet(msg)
@@ -136,9 +150,10 @@ class FleetCopilot:
             return self._response(message, reply_parts, tool_calls, pending_confirmation="breakdown")
 
         elif "urgent" in msg or "emergency order" in msg:
-            reply_parts.append(
-                "Urgent order insertion: use Event Center or POST /api/fleet/events with type urgent_order."
-            )
+            if not allow_mutations:
+                return self.answer_help(message)
+            reply_parts.append("I can insert an urgent delivery near the depot. Confirm to proceed.")
+            return self._response(message, reply_parts, tool_calls, pending_confirmation="urgent_order")
 
         elif "at risk" in msg or "at-risk" in msg:
             at_risk = self.store.get_at_risk_deliveries()

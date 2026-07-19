@@ -85,7 +85,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch (err) {
       if (ticketQueue) {
-        ticketQueue.innerHTML = `<p style="color:var(--danger);">${err.message}</p>`;
+        ticketQueue.textContent = err.message;
+        ticketQueue.style.color = "var(--danger)";
       }
     } finally {
       isOverviewLoading = false; // Lock open for next sequence pipeline iterations

@@ -43,6 +43,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       `;
     }).join("");
   } catch (err) {
-    list.innerHTML = `<div class="glass-card empty-state"><span class="icon">⚠️</span>${err.message}</div>`;
+    list.textContent = `⚠️ ${err.message}`;
   }
 });

@@ -98,8 +98,27 @@ def summarize_plan(
 
 
 def compare_plans(plans: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Rank plans; lower composite score is better."""
-    ranked = sorted(plans, key=lambda p: p.get("score", float("inf")))
+    """Rank modes on one shared scale so unlike objective scores are comparable."""
+    mode_tiebreaker = {"green": 0, "economy": 1, "service": 2}
+    for plan in plans:
+        plan.setdefault("objective_score", plan.get("score", 0))
+        unassigned = len(plan.get("unassigned_orders", []))
+        plan["comparison_score"] = round(
+            unassigned * 100000
+            + float(plan.get("total_co2_kg", 0)) * 100
+            + float(plan.get("total_operating_cost_pkr", 0)) * 0.25
+            + float(plan.get("total_distance_km", 0)) * 0.5,
+            2,
+        )
+        plan["score"] = plan["comparison_score"]
+    ranked = sorted(
+        plans,
+        key=lambda p: (
+            len(p.get("unassigned_orders", [])),
+            p["comparison_score"],
+            mode_tiebreaker.get(p.get("mode"), 9),
+        ),
+    )
     for i, plan in enumerate(ranked):
         plan["rank"] = i + 1
     return ranked

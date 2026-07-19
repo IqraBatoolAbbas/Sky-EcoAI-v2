@@ -5,8 +5,8 @@ from fleet_optimizer import FleetOptimizer
 from disruption_agent import DisruptionAgent
 
 
-def test_optimize_assigns_all_orders():
-    store = FleetStore()
+def test_optimize_assigns_all_orders(tmp_path):
+    store = FleetStore(state_path=str(tmp_path / "fleet_state.json"))
     store.reset_demo()
     state = store.get_state()
     opt = FleetOptimizer()
@@ -16,8 +16,8 @@ def test_optimize_assigns_all_orders():
     assert len(plan["vehicle_routes"]) >= 1
 
 
-def test_breakdown_and_recovery_reassigns():
-    store = FleetStore()
+def test_breakdown_and_recovery_reassigns(tmp_path):
+    store = FleetStore(state_path=str(tmp_path / "fleet_state.json"))
     store.reset_demo()
     state = store.get_state()
     opt = FleetOptimizer()

@@ -6,6 +6,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let pendingCopilotConfirm = null;
 
   const fmt = (n, d = 1) => (n == null ? "—" : Number(n).toLocaleString("en-PK", { maximumFractionDigits: d }));
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+  })[char]);
   let demoStep = 1;
 
   const api = async (url, opts = {}) => {
@@ -60,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ].join("");
 
     const alerts = dash.alerts?.length
-      ? dash.alerts.map((a) => `<li class="${a.level}">${a.message}</li>`).join("")
+      ? dash.alerts.map((a) => `<li class="${escapeHtml(a.level)}">${escapeHtml(a.message)}</li>`).join("")
       : '<li class="good">No active alerts — fleet nominal.</li>';
     document.getElementById("alertList").innerHTML = alerts;
 
@@ -71,8 +74,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ? activity.map((a) => `
           <div class="timeline-item">
             <time>${new Date(a.timestamp).toLocaleString()}</time>
-            <strong>${a.actor}</strong> — ${a.action}
-            <div style="color:var(--text-faint);margin-top:4px">${a.detail || ""}</div>
+            <strong>${escapeHtml(a.actor)}</strong> — ${escapeHtml(a.action)}
+            <div style="color:var(--text-faint);margin-top:4px">${escapeHtml(a.detail || "")}</div>
           </div>`).join("")
         : "<p style='color:var(--text-muted);font-size:13px'>No operator actions yet.</p>";
     }
@@ -83,8 +86,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <thead><tr><th>ID</th><th>Name</th><th>Engine</th><th>Status</th><th>Range</th></tr></thead>
         <tbody>${vehicles.map((v) => `
           <tr>
-            <td>${v.id}</td><td>${v.name}</td><td>${v.engine_type}</td>
-            <td><span class="status-pill ${v.status}">${v.status}</span></td>
+            <td>${escapeHtml(v.id)}</td><td>${escapeHtml(v.name)}</td><td>${escapeHtml(v.engine_type)}</td>
+            <td><span class="status-pill ${escapeHtml(v.status)}">${escapeHtml(v.status)}</span></td>
             <td>${v.fuel_or_range_pct}%</td>
           </tr>`).join("")}
         </tbody>
@@ -122,7 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       const latest = alerts[0];
       ticker.hidden = false;
-      ticker.innerHTML = `<strong>${latest.title || "Alert"}</strong> · ${latest.body || ""} <span style="color:var(--text-faint)">(${(latest.channels || []).join(", ")} · simulated)</span>`;
+      ticker.innerHTML = `<strong>${escapeHtml(latest.title || "Alert")}</strong> · ${escapeHtml(latest.body || "")} <span style="color:var(--text-faint)">(${escapeHtml((latest.channels || []).join(", "))} · simulated)</span>`;
     } catch (_) { /* ignore */ }
   }
 
@@ -140,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const s = data.summary || {};
       board.innerHTML = [
         ["Impact score", s.impact_score ?? "—"],
-        ["CO₂ avoided (kg)", eq.co2_avoided_kg ?? 0],
+        ["CO₂ avoided vs petrol (kg)", eq.co2_avoided_kg ?? 0],
         ["Fuel eq. (L)", eq.fuel_liters_avoided_est ?? 0],
         ["Trees eq.", eq.trees_annual_uptake_est ?? 0],
         ["Deliveries", s.deliveries_protected ?? 0],
@@ -175,7 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const depot = state.depot;
     if (depot) {
       const m = L.marker([depot.lat, depot.lng], { title: "Depot" })
-        .bindPopup(`<b>${depot.name}</b>`)
+        .bindPopup(`<b>${escapeHtml(depot.name)}</b>`)
         .addTo(fleetMap);
       mapLayers.push(m);
     }
@@ -183,7 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
     (state.orders || []).forEach((o) => {
       const color = o.status === "at_risk" ? "#ef4b5f" : o.priority === "high" ? "#f2a65a" : "#8c93ad";
       const m = L.circleMarker([o.lat, o.lng], { radius: 6, color, fillColor: color, fillOpacity: 0.8 })
-        .bindPopup(`<b>${o.customer}</b><br>${o.id} · ${o.weight_kg}kg · ${o.status}`)
+        .bindPopup(`<b>${escapeHtml(o.customer)}</b><br>${escapeHtml(o.id)} · ${fmt(o.weight_kg, 0)}kg · ${escapeHtml(o.status)}`)
         .addTo(fleetMap);
       mapLayers.push(m);
     });
@@ -194,7 +197,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const coords = route.polyline_coords || [];
       if (coords.length < 2) return;
       const line = L.polyline(coords, { color: ROUTE_COLORS[i % ROUTE_COLORS.length], weight: 4, opacity: 0.85 })
-        .bindPopup(`${route.vehicle_name}: ${route.order_count} stops, ${route.distance_km} km`)
+        .bindPopup(`${escapeHtml(route.vehicle_name)}: ${fmt(route.order_count, 0)} stops, ${fmt(route.distance_km)} km`)
         .addTo(fleetMap);
       mapLayers.push(line);
     });
@@ -245,7 +248,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     el.innerHTML = plans.map((p, i) => `
       <div class="plan-card ${i === 0 ? "recommended" : ""}">
-        <h4>${p.label || p.mode} ${i === 0 ? "★ Recommended" : ""}</h4>
+        <h4>${escapeHtml(p.label || p.mode)} ${i === 0 ? "★ Recommended" : ""}</h4>
         <div class="plan-metric"><span>Score</span><b>${fmt(p.score, 2)}</b></div>
         <div class="plan-metric"><span>Deliveries</span><b>${p.deliveries_assigned || 0}</b></div>
         <div class="plan-metric"><span>Distance</span><b>${fmt(p.total_distance_km)} km</b></div>
@@ -255,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <span class="budget-badge ${p.within_carbon_budget === false ? "bad" : "ok"}">
           ${p.within_carbon_budget === false ? "Over carbon budget" : "Within carbon budget"}
         </span>
-        <button class="primary-btn apply-plan-btn" data-plan-id="${p.id}" style="width:100%;margin-top:10px;font-size:12px;">Apply plan</button>
+        <button class="primary-btn apply-plan-btn" data-plan-id="${escapeHtml(p.id)}" style="width:100%;margin-top:10px;font-size:12px;">Apply plan</button>
       </div>`).join("");
 
     el.querySelectorAll(".apply-plan-btn").forEach((btn) => {
@@ -346,7 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderAtRisk(orders) {
     const atRisk = (orders || []).filter((o) => o.status === "at_risk");
     document.getElementById("atRiskList").innerHTML = atRisk.length
-      ? `<ul class="alert-list">${atRisk.map((o) => `<li class="critical">${o.id} — ${o.customer}</li>`).join("")}</ul>`
+      ? `<ul class="alert-list">${atRisk.map((o) => `<li class="critical">${escapeHtml(o.id)} — ${escapeHtml(o.customer)}</li>`).join("")}</ul>`
       : "<p style='color:var(--text-muted);font-size:13px'>No at-risk deliveries.</p>";
   }
 
@@ -356,8 +359,8 @@ document.addEventListener("DOMContentLoaded", () => {
       ? decisions.slice().reverse().map((d) => `
         <div class="timeline-item">
           <time>${new Date(d.timestamp).toLocaleString()}</time>
-          <strong>${d.trigger}</strong> — ${d.explanation || ""}
-          <div style="color:var(--text-faint);margin-top:4px">${d.approval_status || ""}</div>
+          <strong>${escapeHtml(d.trigger)}</strong> — ${escapeHtml(d.explanation || "")}
+          <div style="color:var(--text-faint);margin-top:4px">${escapeHtml(d.approval_status || "")}</div>
         </div>`).join("")
       : "<p style='color:var(--text-muted);font-size:13px'>No agent decisions yet.</p>";
   }
@@ -367,7 +370,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const appendMsg = (text, role, tools = "") => {
     const div = document.createElement("div");
     div.className = `copilot-msg ${role}`;
-    div.innerHTML = text + (tools ? `<div class="tools">Tools: ${tools}</div>` : "");
+    div.textContent = text;
+    if (tools) {
+      const toolInfo = document.createElement("div");
+      toolInfo.className = "tools";
+      toolInfo.textContent = `Tools: ${tools}`;
+      div.appendChild(toolInfo);
+    }
     copilotMessages.appendChild(div);
     copilotMessages.scrollTop = copilotMessages.scrollHeight;
   };
@@ -409,7 +418,7 @@ document.addEventListener("DOMContentLoaded", () => {
     appendMsg(data.reply, "bot", (data.tool_calls || []).map((t) => t.tool).join(", "));
     if (data.pending_confirmation) {
       pendingCopilotConfirm = data.pending_confirmation;
-      appendMsg("⚠️ Confirm this action? Send message: <b>yes confirm</b>", "bot");
+      appendMsg("⚠️ Confirm this action? Send message: yes confirm", "bot");
     } else {
       pendingCopilotConfirm = null;
     }
@@ -446,7 +455,7 @@ document.addEventListener("DOMContentLoaded", () => {
       kpi("Km planned", fmt(summary.km_planned), "", true),
       kpi("Est. cost (PKR)", fmt(summary.estimated_cost_pkr, 0), "", true),
       kpi("Est. CO₂e (kg)", fmt(summary.estimated_co2_kg, 2), "good"),
-      kpi("CO₂ avoided (kg)", fmt(summary.co2_avoided_vs_baseline_kg, 2), "good"),
+      kpi("CO₂ avoided vs petrol (kg)", fmt(summary.co2_avoided_vs_conventional_kg, 2), "good"),
       kpi("Deliveries protected", summary.deliveries_protected || 0, "good"),
       kpi("Disruptions resolved", summary.disruptions_resolved || 0),
       kpi("Agent actions", summary.agent_actions || 0),
@@ -456,7 +465,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const hist = summary.disruption_history || [];
     document.getElementById("disruptionHistory").innerHTML = hist.length
-      ? `<ul class="alert-list">${hist.map((e) => `<li>${e.type} · ${new Date(e.timestamp).toLocaleString()}</li>`).join("")}</ul>`
+      ? `<ul class="alert-list">${hist.map((e) => `<li>${escapeHtml(e.type)} · ${new Date(e.timestamp).toLocaleString()}</li>`).join("")}</ul>`
       : "<p style='color:var(--text-muted);font-size:13px'>No disruptions recorded yet.</p>";
   }
 
@@ -554,7 +563,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function setStatus(msg) {
-    document.getElementById("systemStatus").innerHTML = `<span class="dot ok"></span> ${msg}`;
+    const status = document.getElementById("systemStatus");
+    status.textContent = "";
+    const dot = document.createElement("span");
+    dot.className = "dot ok";
+    status.append(dot, document.createTextNode(` ${msg}`));
   }
 
   refreshOverview().catch((err) => setStatus(`Error: ${err.message}`));

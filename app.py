@@ -1,4 +1,6 @@
 from functools import wraps
+import csv
+import io
 import os
 from flask import Flask, Response, jsonify, render_template, render_template_string, request, session, redirect, url_for
 from route_agent import EcoRouteAgent
@@ -15,12 +17,21 @@ from actor_util import current_actor
 import html
 import re
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 app = Flask(__name__)
 app.permanent_session_lifetime = timedelta(days=30)
-# Stable secret keeps sessions alive across restarts; override with FLASK_SECRET_KEY in prod
-app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "sky-ecoai-hackathon-dev-secret-change-me"
+is_production = os.environ.get("FLASK_ENV", "").lower() == "production" or os.environ.get("SKY_ENV", "").lower() == "production"
+configured_secret = os.environ.get("FLASK_SECRET_KEY")
+if is_production and not configured_secret:
+    raise RuntimeError("FLASK_SECRET_KEY must be set in production.")
+app.secret_key = configured_secret or "sky-ecoai-hackathon-dev-secret-change-me"
+app.config.update(
+    MAX_CONTENT_LENGTH=1 * 1024 * 1024,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=is_production,
+)
 
 agent = EcoRouteAgent()
 users = UserStore()
@@ -34,6 +45,20 @@ rag_store = RagStore()
 fleet_copilot = FleetCopilot(fleet_store, disruption_agent, rag_store)
 
 
+@app.after_request
+def add_security_headers(response):
+    """Apply conservative browser protections without breaking the local demo."""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(self), microphone=(self), camera=()")
+    if request.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    if request.is_secure:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
 def login_required_api(fn):
     """Require session user (including demo guest) for mutating / private APIs."""
     @wraps(fn)
@@ -42,6 +67,29 @@ def login_required_api(fn):
             return jsonify({"error": "Authentication required. Log in or use Demo Operator."}), 401
         return fn(*args, **kwargs)
     return wrapper
+
+
+def sync_plan_flags(user):
+    plan = (user or {}).get("plan", "free")
+    session["is_premium"] = plan in {"premium", "pro"}
+    session["is_pro"] = plan == "pro"
+
+
+def refresh_session_user():
+    user_context = session.get("user")
+    email = (user_context or {}).get("email")
+    if not email:
+        return user_context
+
+    user_list = users._read()
+    for record in user_list:
+        if record.get("email", "").strip().lower() == email.strip().lower():
+            user_context = users._public(record)
+            session["user"] = user_context
+            sync_plan_flags(user_context)
+            return user_context
+
+    return user_context
 
 
 def page_login_required(view):
@@ -73,7 +121,7 @@ class MockUser:
 # 🧭 Makes the logged-in user available to every template (nav, gated pages)
 @app.context_processor
 def inject_current_user():
-    user_context = session.get("user")
+    user_context = refresh_session_user()
     
     # 🚀 CHECK STATE: Agar user explicitly signup, login, ya home page par hai
 
@@ -118,7 +166,6 @@ def control_tower_impact_print():
 
 @app.get("/dashboard")
 def dashboard_view():
-    print(f"DEBUG SESSION: {session.get('user')}")
     if not session.get("user"):
         return redirect(url_for("login_view")) # Logout ke baad login par bhejo!
     return render_template("dashboard.html")
@@ -152,13 +199,19 @@ def account_view():
 @app.get("/logout")
 def logout_view():
     session.pop("user", None)
+    session.pop("is_premium", None)
+    session.pop("is_pro", None)
     return redirect(url_for("home"))
 
 @app.get("/premium")
 def premium_view():
     if not session.get("user"):
         return redirect(url_for("login_view", next="/premium"))
-    return render_template("premium.html")
+    current_user = refresh_session_user()
+    plan = (current_user or {}).get("plan", "free")
+    is_upgraded = plan in {"premium", "pro"}
+    sync_plan_flags(current_user)
+    return render_template("premium.html", current_user=current_user, is_upgraded=is_upgraded)
 
 @app.get("/tickets")
 def my_tickets_view():
@@ -180,11 +233,13 @@ def api_signup():
     try:
         user = users.create_user(name, email, password)
         session["user"] = user
+        sync_plan_flags(user)
         return jsonify(user), 201
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": f"Signup Pipeline Error: {str(e)}"}), 500
+    except Exception:
+        app.logger.exception("Signup failed")
+        return jsonify({"error": "Signup is temporarily unavailable. Please try again."}), 500
 
 @app.post("/api/login")
 def api_login():
@@ -195,12 +250,14 @@ def api_login():
     try:
         user = users.verify_user(email, password)
         session["user"] = user
+        sync_plan_flags(user)
         session.permanent = True
         return jsonify(user), 200
     except ValidationError as e:
         return jsonify({"error": str(e)}), 401
-    except Exception as e:
-        return jsonify({"error": f"Login Pipeline Error: {str(e)}"}), 500
+    except Exception:
+        app.logger.exception("Login failed")
+        return jsonify({"error": "Login is temporarily unavailable. Please try again."}), 500
 
 
 @app.post("/api/demo-login")
@@ -222,6 +279,8 @@ def api_demo_login():
 @app.post("/api/logout")
 def api_logout():
     session.pop("user", None)
+    session.pop("is_premium", None)
+    session.pop("is_pro", None)
     return jsonify({"ok": True})
 
 @app.get("/api/session")
@@ -246,14 +305,14 @@ def api_update_account():
         # Sahi call: (email, payload_dictionary)
         user = users.update_user(session["user"]["email"], update_payload)
         session["user"] = user
+        sync_plan_flags(user)
         session.modified = True # Ensure session updates
         return jsonify(user), 200
     except ValidationError as e:
         return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        # Agar error yahan bhi show na ho, toh print karein
-        print(f"DEBUG: {str(e)}") 
-        return jsonify({"error": f"Account Update Error: {str(e)}"}), 500
+    except Exception:
+        app.logger.exception("Account update failed")
+        return jsonify({"error": "Account settings could not be updated."}), 500
 # ------------------------------------------------------------------
 # 📒 PER-ACCOUNT LEDGER (Persisted Server-Side)
 # ------------------------------------------------------------------
@@ -307,6 +366,8 @@ def api_create_support_ticket():
 
     if not email or not message:
         return jsonify({"error": "Validation Error: Email and message are required."}), 400
+    if len(email) > 254 or len(category) > 60 or len(message) > 5000:
+        return jsonify({"error": "Ticket fields exceed the allowed length."}), 400
 
     try:
         # 1. Store the baseline ticket structure
@@ -398,6 +459,10 @@ def api_premium_checkout():
         return jsonify({"error": "Enter the expiry date as MM/YY."}), 400
     if not re.match(r"^\d{3,4}$", cvv):
         return jsonify({"error": "Enter a valid CVV."}), 400
+    expiry_month, expiry_year = int(match.group(1)), 2000 + int(match.group(2))
+    now = datetime.now(timezone.utc)
+    if (expiry_year, expiry_month) < (now.year, now.month):
+        return jsonify({"error": "This card has expired."}), 400
 
     try:
         # 1. User records ko DB/Storage mein upgrade karein
@@ -576,6 +641,8 @@ def api_fleet_state():
 def api_fleet_optimize():
     data = request.get_json(silent=True) or {}
     mode = data.get("mode", "all")
+    if mode not in {"all", "economy", "green", "service"}:
+        return jsonify({"error": "mode must be one of: all, economy, green, service."}), 400
     state = fleet_store.get_state()
     budget = float(state.get("carbon_budget_kg") or 45)
     enforce = bool(state.get("enforce_carbon_budget", True))
@@ -589,10 +656,21 @@ def api_fleet_optimize():
         co2 = float(p.get("total_co2_kg") or 0)
         p["within_carbon_budget"] = co2 <= budget
         p["carbon_budget_kg"] = budget
+        comparison_score = float(p.get("comparison_score", p.get("score", 0)))
         if enforce and not p["within_carbon_budget"]:
-            p["score"] = round(float(p.get("score") or 0) + 5000, 2)
+            comparison_score += 5000
             p["budget_penalty"] = True
-    ranked = sorted(ranked, key=lambda x: x.get("score", float("inf")))
+        p["comparison_score"] = round(comparison_score, 2)
+        p["score"] = p["comparison_score"]
+    mode_tiebreaker = {"green": 0, "economy": 1, "service": 2}
+    ranked = sorted(
+        ranked,
+        key=lambda x: (
+            len(x.get("unassigned_orders", [])),
+            x.get("comparison_score", float("inf")),
+            mode_tiebreaker.get(x.get("mode"), 9),
+        ),
+    )
     for i, p in enumerate(ranked):
         p["rank"] = i + 1
 
@@ -695,6 +773,8 @@ def api_fleet_copilot():
     message = data.get("message", "").strip()
     if not message:
         return jsonify({"error": "message is required."}), 400
+    if len(message) > 2000:
+        return jsonify({"error": "message must be 2,000 characters or fewer."}), 400
     confirm = bool(data.get("confirm", False))
     pending_action = data.get("pending_action")
     return jsonify(fleet_copilot.process_message(
@@ -747,6 +827,8 @@ def api_fleet_scenario_nl():
     prompt = (data.get("prompt") or data.get("message") or "").strip()
     if not prompt:
         return jsonify({"error": "prompt is required", "example": "Two medical emergencies near Cantt then breakdown"}), 400
+    if len(prompt) > 2000:
+        return jsonify({"error": "prompt must be 2,000 characters or fewer."}), 400
     auto_recover = bool(data.get("auto_recover", True))
     result = disruption_agent.execute_nl_scenario(prompt)
     if auto_recover and result.get("recovery") and result["recovery"].get("recommended_plan_id"):
@@ -790,6 +872,8 @@ def api_help_chat():
     message = data.get("message", "").strip()
     if not message:
         return jsonify({"error": "message is required."}), 400
+    if len(message) > 2000:
+        return jsonify({"error": "message must be 2,000 characters or fewer."}), 400
     return jsonify(fleet_copilot.answer_help(message))
 
 
@@ -802,6 +886,7 @@ def api_help_sources():
 # 🌱 ROUTE OPTIMIZATION TERMINAL
 # ------------------------------------------------------------------
 @app.post("/api/optimize")
+@login_required_api
 def optimize_route():
     data = request.get_json(silent=True) or {}
     source = html.escape(data.get("source", "").strip())
@@ -815,12 +900,15 @@ def optimize_route():
 
     if not source or not destination:
         return jsonify({"error": "Validation Error: Inputs cannot be empty."}), 400
+    if len(source) > 200 or len(destination) > 200:
+        return jsonify({"error": "Source and destination must be 200 characters or fewer."}), 400
 
     try:
         report_output = agent.optimize(source, destination, vehicle)
         return jsonify(report_output)
-    except Exception as e:
-        return jsonify({"error": f"Agent Pipeline Error: {str(e)}"}), 500
+    except Exception:
+        app.logger.exception("Route optimization failed")
+        return jsonify({"error": "Route optimization failed. Please try again."}), 500
     
 @app.route('/admin/reply/<ticket_id>', methods=['POST'])
 def admin_reply(ticket_id):
@@ -828,9 +916,11 @@ def admin_reply(ticket_id):
     if not admin_required():
         return jsonify({"error": "Unauthorized"}), 403
     
-    reply_text = request.form.get('reply')
-
-    return jsonify({"status": "success", "message": "Reply sent to user!"})
+    reply_text = (request.form.get("reply") or "").strip()
+    try:
+        return jsonify(support.respond(ticket_id, html.escape(reply_text))), 200
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.route("/api/admin/users/<path:user_id>/delete", methods=["DELETE", "POST"])
@@ -839,44 +929,13 @@ def api_admin_delete_user(user_id):
         return jsonify({"error": "Admin session required."}), 401
         
     try:
-        import os, json, shutil
-        # 1. Correct Path Trace
-        source_path = "data/users.json" 
-        temp_path = "/tmp/users.json"
-        if not os.path.exists(temp_path) and os.path.exists(source_path):
-            shutil.copy(source_path, temp_path)
-        file_path = temp_path if os.path.exists(temp_path) else source_path
-
-        # 2. Read file as a true LIST
-        with open(file_path, "r") as f:
-            user_list = json.load(f)
-            
-        if not isinstance(user_list, list):
-            return jsonify({"error": "Database format mismatch. Expected a list."}), 500
-
-        user_id_clean = user_id.strip().lower()
-        original_length = len(user_list)
-
-        # 3. Filter out the targeted user safely (Strict list comprehension)
-        # Yeh email match karega bina pooray data structure ko kharab kiye
-        updated_users = [
-            u for u in user_list 
-            if str(u.get("email", "")).strip().lower() != user_id_clean
-        ]
-
-        # 4. Save back explicitly as a clean LIST format
-        if len(updated_users) < original_length:
-            with open(file_path, "w") as f:
-                json.dump(updated_users, f, indent=4)
-                
-            print(f"✅ ROOT LIST PURGE SUCCESSFUL: Removed {user_id_clean}")
-            return jsonify({"message": "Account permanently deleted from root database."}), 200
-        else:
-            return jsonify({"error": "User identity not found in database registry."}), 400
-            
-    except Exception as e:
-        print(f"\n❌ ROOT LIST PURGE CRASH: {str(e)}\n")
-        return jsonify({"error": f"Database write error: {str(e)}"}), 500
+        users.delete_user(user_id)
+        return jsonify({"message": "Account permanently deleted."}), 200
+    except ValidationError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except Exception:
+        app.logger.exception("Admin user deletion failed")
+        return jsonify({"error": "Account could not be deleted."}), 500
 
 @app.route("/api/auth/logout", methods=["POST", "GET"])
 def user_logout():
@@ -899,20 +958,23 @@ def api_export_csv():
         # Ledger store ka method call karein
         entries = ledger.get_premium_csv_data(user["email"], is_premium, plan)
         
-        # CSV generation
-        csv_data = "Query,Engine,Sprint CO2(g),Green CO2(g),Saved CO2(g)\n"
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(["Query", "Engine", "Sprint CO2(g)", "Green CO2(g)", "Saved CO2(g)"])
         for entry in entries:
-            csv_data += f"{entry.get('query','')},{entry.get('engine','')},{entry.get('sprintCo2','')},{entry.get('greenCo2','')},{entry.get('saved','')}\n"
+            row = [entry.get("query", ""), entry.get("engine", ""), entry.get("sprintCo2", ""), entry.get("greenCo2", ""), entry.get("saved", "")]
+            writer.writerow([f"'{value}" if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")) else value for value in row])
         
         return Response(
-            csv_data,
-            mimetype="text/csv",
+            output.getvalue(),
+            mimetype="text/csv; charset=utf-8",
             headers={"Content-Disposition": "attachment; filename=sky_eco_telemetry.csv"}
         )
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
-    except Exception as e:
-        return jsonify({"error": "System Error: " + str(e)}), 500
+    except Exception:
+        app.logger.exception("CSV export failed")
+        return jsonify({"error": "CSV export failed."}), 500
 @app.route('/update_profile', methods=['POST'])
 def update_profile():
     try:
@@ -920,17 +982,17 @@ def update_profile():
         if not user_session:
             return jsonify({"error": "No session found"}), 401
         
-        user_email = session.get("user")["email"]
-        data_to_update = {"name": request.form.get('name')}
-        
-        # Test: kya ye line chal rahi hai?
-        users.update_user(user_email, data_to_update)
-        session["user"] = users._read() # Refresh object from file
+        user_email = user_session["email"]
+        updated_user = users.update_user(user_email, {"name": request.form.get("name", "").strip()})
+        session["user"] = updated_user
+        sync_plan_flags(updated_user)
         session.modified = True
-        return jsonify({"success": True})
-    except Exception as e:
-        print(f"DEBUG ERROR: {str(e)}") # Ye terminal mein error print karega
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": True, "user": updated_user})
+    except ValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        app.logger.exception("Profile update failed")
+        return jsonify({"error": "Profile could not be updated."}), 500
 
 @app.route('/api/agent/predict', methods=['GET'])
 def get_agent_prediction():
@@ -940,9 +1002,6 @@ def get_agent_prediction():
         
     email = user.get("email", "").strip().lower()
     user_entries = ledger.get_entries(email)
-    
-    # DEBUG: Console mein entries check karne ke liye
-    print(f"DEBUG: Checking ledger for email: '{email}'")
     
     if not user_entries:
         return jsonify({"status": "waiting"})
@@ -966,6 +1025,8 @@ def get_agent_prediction():
 # 1. Page load karne ke liye (Browser ke liye)
 @app.route('/checkout')
 def checkout_page():
+    if not session.get("user"):
+        return redirect(url_for("login_view", next="/checkout"))
     return render_template('premium.html')
 @app.route('/contact-sales')
 def contact_sales():
@@ -973,13 +1034,20 @@ def contact_sales():
 
 @app.route('/api/analyze-fleet', methods=['POST'])
 def analyze_fleet():
-    # 1. Input get karein
-    data = request.get_json()
-    message = data.get("message", "")
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message", "")).strip()
+    if not message:
+        return jsonify({"error": "message is required."}), 400
+    if len(message) > 2000:
+        return jsonify({"error": "message must be 2,000 characters or fewer."}), 400
     
     # 2. Variable define karein (Yehi missing tha!)
     # agent.optimize aapka original function hai
-    analysis_result = agent.optimize("Diagnostic", message, "eco-ai-bot")
+    try:
+        analysis_result = agent.optimize("Diagnostic", message, "eco-ai-bot")
+    except Exception:
+        app.logger.exception("Fleet analysis failed")
+        return jsonify({"error": "Fleet analysis failed. Please try again."}), 500
     
     # 3. Ab 'analysis_result' defined hai, so hum return kar sakte hain
     return jsonify({
@@ -995,7 +1063,8 @@ def analyze_fleet():
 @app.route('/debug-routes')
 @login_required_api
 def debug_routes():
-    import urllib
+    if not app.debug:
+        return jsonify({"error": "Not found."}), 404
     output = []
     for rule in app.url_map.iter_rules():
         output.append(f"{rule.endpoint}: {rule.rule}")
@@ -1012,6 +1081,6 @@ def carbon_agent():
 def not_found(e):
     return render_template("404.html"), 404
 
-print(os.path.abspath('admin.json'))
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True, use_reloader=False)
+    debug_enabled = os.environ.get("FLASK_DEBUG", "").lower() in {"1", "true", "yes"}
+    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", "5000")), debug=debug_enabled, use_reloader=False)
