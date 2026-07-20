@@ -74,23 +74,8 @@ Sky.EcoAI excels in presentation readiness:
 
 ### Data Flow Architecture
 
-```
-User Request → Flask API → Authentication → Fleet Store
-                                            ↓
-                                    Fleet Optimizer
-                                            ↓
-                                    Carbon Cost Engine
-                                            ↓
-                                    Route Plans (Economy/Green/Service)
-                                            ↓
-                                    Disruption Detection
-                                            ↓
-                                    Recovery Planning
-                                            ↓
-                                    AI Copilot Explanation
-                                            ↓
-                                    Response + RAG Grounding
-```
+<img src="static/images/operational-flow.png" width="280" alt="Operational and Recovery Workflow" />
+
 
 ### Module Responsibilities
 
