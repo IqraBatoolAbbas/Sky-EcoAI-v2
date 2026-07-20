@@ -65,7 +65,47 @@ Sky.EcoAI excels in presentation readiness:
 - **Demo video guide** documentation for consistent presentations
 
 ## 🏗️ System Architecture
+graph TD
+    %% Styling Configuration
+    classDef controlTower fill:#1b263b,stroke:#e0e1dd,stroke-width:2px,color:#fff,font-weight:bold;
+    classDef coreModule fill:#415a77,stroke:#e0e1dd,stroke-width:1px,color:#fff;
+    classDef subLayer fill:#778da9,stroke:#e0e1dd,stroke-width:1px,color:#fff,font-weight:bold;
+    classDef engine fill:#e0e1dd,stroke:#1b263b,stroke-width:2px,color:#1b263b,font-weight:bold;
 
+    %% Control Tower Main Container
+    subgraph SkyEcoAI [Sky.EcoAI Control Tower]
+        
+        %% Top Core Inputs/Endpoints
+        A[Flask API<br>app.py]
+        B[Fleet Store<br>JSON State]
+        C[RAG Store<br>Knowledge Base]
+        
+        %% Middle Management Layer
+        subgraph FML [Fleet Management Layer]
+            D[Optimizer<br>OR-Tools]
+            E[Disruption Agent<br>Recovery Engine]
+            F[AI Fleet Copilot<br>NLP & Tool Calling]
+        end
+        
+        %% Bottom Computation Engine
+        G[Carbon Cost Engine<br>Distance, Emissions & Cost Calculations]
+        
+    end
+
+    %% Data Flow Connections
+    A --> FML
+    B --> FML
+    C --> FML
+    
+    D --> G
+    E --> G
+    F --> G
+
+    %% Applying Styles
+    class SkyEcoAI controlTower;
+    class A,B,C coreModule;
+    class FML subLayer;
+    class G engine;
 ### Core Components
 
 ```
