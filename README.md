@@ -68,7 +68,7 @@ Sky.EcoAI excels in presentation readiness:
 
 ### Core Components
 
-<img width="603" height="221" alt="Screenshot 2026-07-20 224244" src="https://github.com/user-attachments/assets/2c140f78-8740-4214-ab1f-9a297466424b" />
+<img src="static/images/architecture.png" width="603" height="221" alt="System Architecture" />
 
 
 
